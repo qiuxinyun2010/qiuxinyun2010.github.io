@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Hexo, NexT" />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="介绍Windows和需要执行TCP&#x2F;IP网络通信的应用程序会调用动态链接库ws2_32.dll。常用的发包函数有send和wsa_send,收包有recv和wsa_recv等等。 这里主要采用frida框架对进程注入hook脚本。 send与WSASend的区别12int __stdcall send(SOCKET s, const char *buf, int len, int fla">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Windows的sockets封包拦截">
+<meta property="og:url" content="http://example.com/2022/10/15/Windows%E7%9A%84sockets%E5%B0%81%E5%8C%85%E6%8B%A6%E6%88%AA/index.html">
+<meta property="og:site_name" content="QXY‘s blog">
+<meta property="og:description" content="介绍Windows和需要执行TCP&#x2F;IP网络通信的应用程序会调用动态链接库ws2_32.dll。常用的发包函数有send和wsa_send,收包有recv和wsa_recv等等。 这里主要采用frida框架对进程注入hook脚本。 send与WSASend的区别12int __stdcall send(SOCKET s, const char *buf, int len, int fla">
+<meta property="og:locale">
+<meta property="og:image" content="http://example.com/2022/10/15/Windows%E7%9A%84sockets%E5%B0%81%E5%8C%85%E6%8B%A6%E6%88%AA/1.PNG">
+<meta property="article:published_time" content="2022-10-15T12:16:54.000Z">
+<meta property="article:modified_time" content="2022-11-27T10:19:30.212Z">
+<meta property="article:author" content="丘新云">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2022/10/15/Windows%E7%9A%84sockets%E5%B0%81%E5%8C%85%E6%8B%A6%E6%88%AA/1.PNG">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '',
+    scheme: 'Pisces',
+    version: '5.1.4',
+    sidebar: {"position":"right","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://example.com/2022/10/15/Windows的sockets封包拦截/"/>
+
+
+
+
+
+  <title>Windows的sockets封包拦截 | QXY‘s blog</title>
+  
+
+
+
+
+
+
+
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-right page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">QXY‘s blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/15/Windows%E7%9A%84sockets%E5%B0%81%E5%8C%85%E6%8B%A6%E6%88%AA/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="QXY‘s blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Windows的sockets封包拦截</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-15T20:16:54+08:00">
+                2022-10-15
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h3 id="介绍"><a href="#介绍" class="headerlink" title="介绍"></a>介绍</h3><p>Windows和需要执行TCP&#x2F;IP网络通信的应用程序会调用动态链接库<strong>ws2_32.dll</strong>。<br>常用的发包函数有<em>send</em>和<em>wsa_send</em>,收包有<em>recv</em>和<em>wsa_recv</em>等等。</p>
+<p>这里主要采用frida框架对进程注入hook脚本。</p>
+<h3 id="send与WSASend的区别"><a href="#send与WSASend的区别" class="headerlink" title="send与WSASend的区别"></a>send与WSASend的区别</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">send</span><span class="params">(SOCKET s, <span class="type">const</span> <span class="type">char</span> *buf, <span class="type">int</span> len, <span class="type">int</span> flags)</span></span></span><br><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">WSASend</span><span class="params">(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesSent ...)</span></span></span><br></pre></td></tr></table></figure>
+<p>其中，send的buf是指向用户缓冲区的指针，len代表用户缓冲区长度。</p>
+<p>而WSASend的lpBuffers是指向 WSABUF 结构的数组的指针,dwBufferCount代表这个数组的大小。 WSABUF包含了一个用户缓冲区的指针和其对应的长度。</p>
+<p>也就是说，send每次只能发送一个用户缓冲区的数据，而WSASend可以发送多个用户缓冲区的数据。</p>
+<p>每次调用send都会导致用户态向内核态的切换。当发送大量数据的时候，WSASend有更少的切换次数，从而有更高的效率。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">_WSABUF</span> &#123;</span><br><span class="line">  ULONG len;</span><br><span class="line">  CHAR  *buf;</span><br><span class="line">&#125; WSABUF, *LPWSABUF;</span><br></pre></td></tr></table></figure>
+
+<p>根据函数的参数定义，从而写出这两个函数的hook脚本。</p>
+<p>send发包的hook脚本</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="title class_">Interceptor</span>.<span class="title function_">attach</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;send&quot;</span>), &#123;</span><br><span class="line">    <span class="attr">onEnter</span>: <span class="keyword">function</span>(<span class="params">args</span>) &#123;</span><br><span class="line">        <span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+] Hooked ws2_32.dll@send&quot;</span>);</span><br><span class="line">        <span class="keyword">var</span> fd = args[<span class="number">0</span>];</span><br><span class="line">        <span class="keyword">var</span> buf = <span class="title function_">ptr</span>(args[<span class="number">1</span>]);</span><br><span class="line">        <span class="keyword">var</span> len = args[<span class="number">2</span>].<span class="title function_">toInt32</span>();</span><br><span class="line">        <span class="keyword">var</span> flag = args[<span class="number">3</span>];</span><br><span class="line">        <span class="keyword">var</span> data = <span class="title class_">Memory</span>.<span class="title function_">readByteArray</span>(buf, len);</span><br><span class="line">        <span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;hex:&quot;</span>,<span class="title function_">buf2hex</span>(data));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+<p>WSASend的hook脚本</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="title class_">Interceptor</span>.<span class="title function_">attach</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;WSASend&quot;</span>), &#123;</span><br><span class="line">    <span class="attr">onEnter</span>: <span class="keyword">function</span>(<span class="params">args</span>) &#123;</span><br><span class="line">        <span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+] Hookedws2_32.dll@WSASend&quot;</span>);</span><br><span class="line">        <span class="keyword">var</span> fd = args[<span class="number">0</span>];</span><br><span class="line">        <span class="keyword">var</span> lpBuffers = <span class="title function_">ptr</span>(args[<span class="number">1</span>]);</span><br><span class="line">        <span class="keyword">var</span> dwBufferCount = args[<span class="number">2</span>].<span class="title function_">toInt32</span>();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span>(<span class="keyword">var</span> i=<span class="number">0</span>;i&lt;dwBufferCount;i++)&#123;</span><br><span class="line">            <span class="keyword">var</span> wsabuf = lpBuffers.<span class="title function_">add</span>(i*<span class="number">8</span>); </span><br><span class="line">            <span class="keyword">var</span> len = wsabuf.<span class="title function_">readUInt</span>();</span><br><span class="line">            <span class="keyword">var</span> buf = <span class="title function_">ptr</span>(wsabuf.<span class="title function_">add</span>(<span class="number">4</span>).<span class="title function_">readUInt</span>());</span><br><span class="line">            <span class="keyword">var</span> data = <span class="title class_">Memory</span>.<span class="title function_">readByteArray</span>(buf_ptr, len);</span><br><span class="line">            <span class="variable language_">console</span>.<span class="title function_">log</span>(data);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+<h3 id="recv函数"><a href="#recv函数" class="headerlink" title="recv函数"></a>recv函数</h3><p>值得注意的是recv函数和send函数的拦截思路是不同的。<br>此时的len是指用户缓冲区的大小，<strong>并非接收数据包的大小</strong>。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">recv</span><span class="params">(SOCKET s, <span class="type">char</span> *buf, <span class="type">int</span> len, <span class="type">int</span> flags)</span></span></span><br></pre></td></tr></table></figure>
+<p>所以在onEnter阶段进行hook是不行的，此时还不知道数据包有多大。</p>
+<p>只有在onLeave阶段才行，这个时候内核已经完成了数据的拷贝操作，即在内核的socket接收缓存区的数据包拷贝到用户缓冲区（buf指针）。</p>
+<p>数据包的大小就是它的返回值。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> recvBuf;</span><br><span class="line"><span class="title class_">Interceptor</span>.<span class="title function_">attach</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;recv&quot;</span>), &#123;</span><br><span class="line">    <span class="attr">onEnter</span>: <span class="keyword">function</span>(<span class="params">args</span>) &#123;</span><br><span class="line">        recvBuf = args[<span class="number">1</span>];</span><br><span class="line">    &#125;,</span><br><span class="line">    <span class="attr">onLeave</span>: <span class="keyword">function</span>(<span class="params">ret</span>) &#123;</span><br><span class="line">        <span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+] Hookedws2_32.dll@recv&quot;</span>);</span><br><span class="line">        <span class="keyword">var</span> dataLen= ret.<span class="title function_">toInt32</span>(); </span><br><span class="line">        <span class="keyword">if</span>(dataLen &gt; <span class="number">0</span>)&#123;</span><br><span class="line">            <span class="keyword">var</span> data = <span class="title class_">Memory</span>.<span class="title function_">readByteArray</span>(recvBuf, dataLen);</span><br><span class="line">           <span class="variable language_">console</span>.<span class="title function_">log</span>(data);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<h3 id="Ip地址和端口的获取"><a href="#Ip地址和端口的获取" class="headerlink" title="Ip地址和端口的获取"></a>Ip地址和端口的获取</h3><p>IP和port是存放在<strong>sockaddr</strong>或<strong>sockaddr_in</strong>中的。两个大小都是16字节。<br>其中端口占2字节、地址占4字节。偏移位置也是一样的。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">sockaddr</span> &#123;</span><br><span class="line">        ushort  sa_family;</span><br><span class="line">        <span class="type">char</span>    sa_data[<span class="number">14</span>];</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">sockaddr_in</span> &#123;</span><br><span class="line">        <span class="type">short</span>   sin_family;</span><br><span class="line">        u_short sin_port;</span><br><span class="line">        <span class="keyword">struct</span>  <span class="title class_">in_addr</span> sin_addr;</span><br><span class="line">        <span class="type">char</span>    sin_zero[<span class="number">8</span>];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>然而无论是发包函数还是收包函数，它们的传参并没有<strong>sockaddr</strong>结构体的指针。<br>也就是没法直接获取地址和端口信息。</p>
+<p>ws2_32.dll提供了两个函数<strong>getsockname</strong>和<strong>getpeername</strong>通过socket的文件描述符来检索对应的sockaddr指针。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">getsockname</span><span class="params">(SOCKET s, <span class="keyword">struct</span> sockaddr *name, <span class="type">int</span> *namelen)</span></span></span><br><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">getpeername</span><span class="params">(SOCKET s, <span class="keyword">struct</span> sockaddr *name, <span class="type">int</span> *namelen)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>name是指在用户区分配的sockaddr结构体，namelen一般都是16。</p>
+<p>调用getsockname后name指向的sockaddr里的数据将会更新成本地端的sockaddr信息。也就是获得了该socket本地的ip和端口。</p>
+<p>调用getpeername则是获取对端的ip和端口。</p>
+<p>那么，可以在注入进程的前提下，主动调用这两个函数获取socket两端的ip和端口信息。</p>
+<p>之所以要注入进程，是因为<strong>不同进程的文件描述符是独立的</strong>。</p>
+<p><strong>注意sockaddr里的port和address都是大端存储的</strong>。编写frida脚本只能用readByteArray不能用readInt。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> getsockname = <span class="keyword">new</span> <span class="title class_">NativeFunction</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;getsockname&quot;</span>), <span class="string">&#x27;int&#x27;</span>, [<span class="string">&#x27;int&#x27;</span>,<span class="string">&#x27;pointer&#x27;</span>,<span class="string">&#x27;pointer&#x27;</span>]);</span><br><span class="line"><span class="keyword">const</span> getpeername = <span class="keyword">new</span> <span class="title class_">NativeFunction</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;getpeername&quot;</span>), <span class="string">&#x27;int&#x27;</span>, [<span class="string">&#x27;int&#x27;</span>,<span class="string">&#x27;pointer&#x27;</span>,<span class="string">&#x27;pointer&#x27;</span>]);</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> getPeerName = <span class="keyword">function</span>(<span class="params">fd</span>) &#123;</span><br><span class="line">    <span class="keyword">var</span> sockaddr = <span class="title class_">Memory</span>.<span class="title function_">alloc</span>(<span class="number">16</span>);</span><br><span class="line">    <span class="keyword">var</span> len = <span class="title class_">Memory</span>.<span class="title function_">alloc</span>(<span class="number">4</span>);</span><br><span class="line">    len.<span class="title function_">writeInt</span>(<span class="number">16</span>);</span><br><span class="line">    <span class="title function_">getpeername</span>(fd,sockaddr,len);</span><br><span class="line">    <span class="keyword">var</span> port = (sockaddr.<span class="title function_">add</span>(<span class="number">2</span>)).<span class="title function_">readByteArray</span>(<span class="number">2</span>)；</span><br><span class="line">    <span class="keyword">var</span> address = (sockaddr.<span class="title function_">add</span>(<span class="number">4</span>)).<span class="title function_">readByteArray</span>(<span class="number">4</span>)；</span><br><span class="line">    <span class="keyword">return</span> &#123;<span class="string">&#x27;address&#x27;</span>:address,<span class="string">&#x27;port&#x27;</span>:port&#125;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="keyword">var</span> getSocktName = <span class="keyword">function</span>(<span class="params">fd</span>)&#123;</span><br><span class="line">    <span class="keyword">var</span> sockaddr = <span class="title class_">Memory</span>.<span class="title function_">alloc</span>(<span class="number">16</span>);</span><br><span class="line">    <span class="keyword">var</span> len = <span class="title class_">Memory</span>.<span class="title function_">alloc</span>(<span class="number">4</span>);</span><br><span class="line">    len.<span class="title function_">writeInt</span>(<span class="number">16</span>);</span><br><span class="line">    <span class="title function_">getsockname</span>(fd,sockaddr,len);</span><br><span class="line">    <span class="keyword">var</span> port = <span class="built_in">parseInt</span>(<span class="title function_">buf2hex</span>((sockaddr.<span class="title function_">add</span>(<span class="number">2</span>)).<span class="title function_">readByteArray</span>(<span class="number">2</span>)),<span class="number">16</span>);</span><br><span class="line">    <span class="keyword">var</span> address = <span class="title function_">buf2dec</span>((sockaddr.<span class="title function_">add</span>(<span class="number">4</span>)).<span class="title function_">readByteArray</span>(<span class="number">4</span>),<span class="string">&#x27;.&#x27;</span>);</span><br><span class="line">    <span class="keyword">return</span> &#123;<span class="string">&#x27;address&#x27;</span>:address,<span class="string">&#x27;port&#x27;</span>:port&#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="结尾"><a href="#结尾" class="headerlink" title="结尾"></a>结尾</h3><p>根据以上思路，自己就可以写一个win平台的socket抓包工具。</p>
+<p><img src="/2022/10/15/Windows%E7%9A%84sockets%E5%B0%81%E5%8C%85%E6%8B%A6%E6%88%AA/1.PNG" alt="1"></p>
+<p>目前只实现了简单的socket抓包功能和数据检索功能。<br>更多的功能还要等后面继续完善。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/" rel="next" title="C++栈溢出">
+                <i class="fa fa-chevron-left"></i> C++栈溢出
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2022/10/27/%E6%9F%90%E7%BD%91%E6%B8%B8%E6%95%B0%E6%8D%AE%E5%8C%85%E8%A7%A3%E5%AF%86/" rel="prev" title="某网游TCP数据包解密">
+                某网游TCP数据包解密 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name"></p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">6</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BB%8B%E7%BB%8D"><span class="nav-number">1.</span> <span class="nav-text">介绍</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#send%E4%B8%8EWSASend%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="nav-number">2.</span> <span class="nav-text">send与WSASend的区别</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#recv%E5%87%BD%E6%95%B0"><span class="nav-number">3.</span> <span class="nav-text">recv函数</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Ip%E5%9C%B0%E5%9D%80%E5%92%8C%E7%AB%AF%E5%8F%A3%E7%9A%84%E8%8E%B7%E5%8F%96"><span class="nav-number">4.</span> <span class="nav-text">Ip地址和端口的获取</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BB%93%E5%B0%BE"><span class="nav-number">5.</span> <span class="nav-text">结尾</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">丘新云</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.4</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.4"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

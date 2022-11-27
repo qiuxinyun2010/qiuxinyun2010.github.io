@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="逆向," />
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="HTTPs抓包一般来说，HTTPs可以采用中间人代理获取到会话密钥，从而能够解密https数据包。 但是，飞书安卓app采用了证书固定（ssl-pinning），客户端也会对证书进行校验，代理软件的证书会校验失败，导致tls握手失败。  绕开证书校验使用jadx进行反编译分析，检索到几个常见的证书校验相关的类。对相关的校验函数进行hook，关键是替换校验的证书为自定义的代理证书。 以下是替换自定义">
+<meta property="og:type" content="article">
+<meta property="og:title" content="飞书安卓逆向分析">
+<meta property="og:url" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/index.html">
+<meta property="og:site_name" content="QXY‘s blog">
+<meta property="og:description" content="HTTPs抓包一般来说，HTTPs可以采用中间人代理获取到会话密钥，从而能够解密https数据包。 但是，飞书安卓app采用了证书固定（ssl-pinning），客户端也会对证书进行校验，代理软件的证书会校验失败，导致tls握手失败。  绕开证书校验使用jadx进行反编译分析，检索到几个常见的证书校验相关的类。对相关的校验函数进行hook，关键是替换校验的证书为自定义的代理证书。 以下是替换自定义">
+<meta property="og:locale">
+<meta property="og:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/0.jpg">
+<meta property="og:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/1.jpg">
+<meta property="og:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/2.PNG">
+<meta property="og:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/3.PNG">
+<meta property="og:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/4.jpg">
+<meta property="og:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/5.jpg">
+<meta property="og:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/6.jpg">
+<meta property="og:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/7.PNG">
+<meta property="og:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/8.PNG">
+<meta property="article:published_time" content="2022-09-06T06:35:48.000Z">
+<meta property="article:modified_time" content="2022-11-27T10:17:02.374Z">
+<meta property="article:author" content="丘新云">
+<meta property="article:tag" content="逆向">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/0.jpg">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '',
+    scheme: 'Pisces',
+    version: '5.1.4',
+    sidebar: {"position":"right","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://example.com/2022/09/06/飞书安卓逆向分析/"/>
+
+
+
+
+
+  <title>飞书安卓逆向分析 | QXY‘s blog</title>
+  
+
+
+
+
+
+
+
+
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-right page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">QXY‘s blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="QXY‘s blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">飞书安卓逆向分析</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-09-06T14:35:48+08:00">
+                2022-09-06
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h3 id="HTTPs抓包"><a href="#HTTPs抓包" class="headerlink" title="HTTPs抓包"></a>HTTPs抓包</h3><p>一般来说，HTTPs可以采用中间人代理获取到会话密钥，从而能够解密https数据包。</p>
+<p>但是，飞书安卓app采用了证书固定（ssl-pinning），客户端也会对证书进行校验，代理软件的证书会校验失败，导致tls握手失败。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/0.jpg" alt="0"></p>
+<h3 id="绕开证书校验"><a href="#绕开证书校验" class="headerlink" title="绕开证书校验"></a>绕开证书校验</h3><p>使用jadx进行反编译分析，检索到几个常见的证书校验相关的类。<br>对相关的校验函数进行hook，关键是替换校验的证书为自定义的代理证书。</p>
+<p>以下是替换自定义证书的frida的脚本。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="title class_">Java</span>.<span class="title function_">perform</span>(<span class="keyword">function</span> (<span class="params"></span>)&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">CertificateFactory</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.security.cert.CertificateFactory&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">FileInputStream</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.io.FileInputStream&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">BufferedInputStream</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.io.BufferedInputStream&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> X509Certificate = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.security.cert.X509Certificate&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">KeyStore</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.security.KeyStore&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">TrustManagerFactory</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;javax.net.ssl.TrustManagerFactory&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">SSLContext</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;javax.net.ssl.SSLContext&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 加载本地证书，前提将代理证书放到相应的目录</span></span><br><span class="line">    <span class="keyword">var</span> cf = <span class="title class_">CertificateFactory</span>.<span class="title function_">getInstance</span>(<span class="string">&quot;X.509&quot;</span>);</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">    	<span class="keyword">var</span> fileInputStream = <span class="title class_">FileInputStream</span>.$new(<span class="string">&quot;/data/local/tmp/cert-der.crt&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">catch</span>(err) &#123;</span><br><span class="line">    	<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[o] &quot;</span> + err);</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">var</span> bufferedInputStream = <span class="title class_">BufferedInputStream</span>.$new(fileInputStream);</span><br><span class="line">  	<span class="keyword">var</span> ca = cf.<span class="title function_">generateCertificate</span>(bufferedInputStream);</span><br><span class="line">    bufferedInputStream.<span class="title function_">close</span>();</span><br><span class="line">	<span class="keyword">var</span> certInfo = <span class="title class_">Java</span>.<span class="title function_">cast</span>(ca, X509Certificate);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 创建KeyStore实例</span></span><br><span class="line">    <span class="keyword">var</span> keyStoreType = <span class="title class_">KeyStore</span>.<span class="title function_">getDefaultType</span>();</span><br><span class="line">    <span class="keyword">var</span> keyStore = <span class="title class_">KeyStore</span>.<span class="title function_">getInstance</span>(keyStoreType);</span><br><span class="line">    keyStore.<span class="title function_">load</span>(<span class="literal">null</span>, <span class="literal">null</span>);</span><br><span class="line">    keyStore.<span class="title function_">setCertificateEntry</span>(<span class="string">&quot;ca&quot;</span>, ca);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 自定义TrustManager，</span></span><br><span class="line">    <span class="keyword">var</span> tmfAlgorithm = <span class="title class_">TrustManagerFactory</span>.<span class="title function_">getDefaultAlgorithm</span>();</span><br><span class="line">    <span class="keyword">var</span> tmf = <span class="title class_">TrustManagerFactory</span>.<span class="title function_">getInstance</span>(tmfAlgorithm);</span><br><span class="line">    tmf.<span class="title function_">init</span>(keyStore);</span><br><span class="line"></span><br><span class="line">       <span class="comment">//对SSLContext进行重载</span></span><br><span class="line">       <span class="comment">//app 唤醒SSLContext时将会调用 自定义好的TrustManager</span></span><br><span class="line">   	<span class="title class_">SSLContext</span>.<span class="property">init</span>.<span class="title function_">overload</span>(<span class="string">&quot;[Ljavax.net.ssl.KeyManager;&quot;</span>, <span class="string">&quot;[Ljavax.net.ssl.TrustManager;&quot;</span>, <span class="string">&quot;java.security.SecureRandom&quot;</span>).<span class="property">implementation</span> = <span class="keyword">function</span>(<span class="params">a,b,c</span>) &#123;</span><br><span class="line">   		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[o] App invoked javax.net.ssl.SSLContext.init...&quot;</span>);</span><br><span class="line">   		<span class="title class_">SSLContext</span>.<span class="property">init</span>.<span class="title function_">overload</span>(<span class="string">&quot;[Ljavax.net.ssl.KeyManager;&quot;</span>, <span class="string">&quot;[Ljavax.net.ssl.TrustManager;&quot;</span>, <span class="string">&quot;java.security.SecureRandom&quot;</span>).<span class="title function_">call</span>(<span class="variable language_">this</span>, a, tmf.<span class="title function_">getTrustManagers</span>(), c);</span><br><span class="line">   		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+] SSLContext initialized with our custom TrustManager!&quot;</span>);</span><br><span class="line">   	&#125;</span><br><span class="line">   &#125;);</span><br></pre></td></tr></table></figure>
+
+<p>之后可以使用charles正常抓取https包，数据包的类型主要是protobuf。<br>下一步则是要对protobuf进行解码。<br><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/1.jpg" alt="1"></p>
+<h3 id="Protobuf解码"><a href="#Protobuf解码" class="headerlink" title="Protobuf解码"></a>Protobuf解码</h3><p>Protobuf解码主要是获取tag值信息，需要根据每个proto对象的配置文件，才能找到tag值对应哪个key。</p>
+<p>所以这需要对java代码的反编译。</p>
+<p>首先，通过注入进程断点打印调用栈，找到了两个proto相关的类路径，<em>com.ss.android.lark.pb</em>和<em>com.bytedance.lark.pb</em>。</p>
+<p>查看smali反编译的伪代码，每个接口的proto数据包外层都被两类proto结构<strong>Packet</strong>所包裹者。<br><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/2.PNG" alt="2"></p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/3.PNG" alt="3"></p>
+<p>其中<strong>cmd</strong>用于标识api接口的特征值，<strong>command</strong>存放api的名字（但是发包时候并不会携带command）,<strong>payload</strong>是存放api接口所需要的proto对象的序列化后的二进制数据，</p>
+<p>通过对这两个<strong>Packet</strong>的构造函数进行hook。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;com.ss.android.lark.pb.improto.Packet&quot;</span>).<span class="property">$init</span>.<span class="title function_">overload</span>(<span class="string">&#x27;java.lang.String&#x27;</span>,<span class="string">&#x27;com.ss.	android.lark.pb.improto.PayloadType&#x27;</span>,</span><br><span class="line">	<span class="string">&#x27;com.ss.android.lark.pb.improto.Command&#x27;</span>,<span class="string">&#x27;java.lang.Integer&#x27;</span>,<span class="string">&#x27;okio.ByteString&#x27;</span>,<span class="string">&#x27;java.lang.String&#x27;</span>,</span><br><span class="line">	<span class="string">&#x27;com.ss.android.lark.pb.improto.PipeEntity&#x27;</span>,<span class="string">&#x27;java.util.List&#x27;</span>,<span class="string">&#x27;java.util.List&#x27;</span>,<span class="string">&#x27;java.lang.Integer&#x27;</span>,</span><br><span class="line">	<span class="string">&#x27;java.lang.Integer&#x27;</span>,<span class="string">&#x27;java.lang.Long&#x27;</span>,<span class="string">&#x27;java.util.List&#x27;</span>,<span class="string">&#x27;okio.ByteString&#x27;</span>).<span class="property">implementation</span> = <span class="keyword">function</span>(<span class="params">x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14</span>) </span><br><span class="line">&#123;</span><br><span class="line">	<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+][com.ss.android.lark.pb.improto.Packet]&quot;</span>);</span><br><span class="line">	<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">`cmd: <span class="subst">$&#123;x3&#125;</span>`</span>);</span><br><span class="line">	<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">`payload: <span class="subst">$&#123;x5&#125;</span>`</span>);</span><br><span class="line">	<span class="keyword">return</span> <span class="variable language_">this</span>.$init(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14);</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;com.bytedance.lark.pb.basic.v1.Packet&quot;</span>).<span class="property">$init</span>.<span class="title function_">overload</span>(</span><br><span class="line">	<span class="string">&#x27;com.bytedance.lark.pb.basic.v1.Command&#x27;</span>, <span class="string">&#x27;java.lang.Integer&#x27;</span>, <span class="string">&#x27;java.lang.String&#x27;</span>, </span><br><span class="line">	<span class="string">&#x27;java.lang.String&#x27;</span>, <span class="string">&#x27;java.lang.String&#x27;</span>, <span class="string">&#x27;java.lang.String&#x27;</span>, <span class="string">&#x27;java.lang.Long&#x27;</span>, <span class="string">&#x27;java.lang.Boolean&#x27;</span>, </span><br><span class="line">	<span class="string">&#x27;com.bytedance.lark.pb.basic.v1.Packet$StreamStatus&#x27;</span>, <span class="string">&#x27;java.lang.String&#x27;</span>, <span class="string">&#x27;com.bytedance.lark.pb.basic.v1.Trace&#x27;</span>, </span><br><span class="line">	<span class="string">&#x27;java.lang.Boolean&#x27;</span>, <span class="string">&#x27;okio.ByteString&#x27;</span>,<span class="string">&#x27;okio.ByteString&#x27;</span>).<span class="property">implementation</span> = <span class="keyword">function</span>(<span class="params">x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14</span>)&#123;</span><br><span class="line">		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+][com.bytedance.lark.pb.basic.v1.Packet]&quot;</span>);</span><br><span class="line">		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">`cmd: <span class="subst">$&#123;x1&#125;</span>`</span>);</span><br><span class="line">		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">`payload: <span class="subst">$&#123;x13&#125;</span>`</span>);</span><br><span class="line">	<span class="keyword">return</span> <span class="variable language_">this</span>.$init(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>之后在app随便操作一下，为了抓取一些Packet数据包。</p>
+<p>其中<strong>cmd</strong>用于标识api接口的特征值，<strong>payload</strong>是存放api接口所需要的proto对象的序列化后的二进制数据。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/4.jpg" alt="4"></p>
+<p>下一步则是要找到payload的解码方法。</p>
+<p>以<em>PUSH_FEED_ENTITY_PREVIEWS</em>为例，通过字符串搜索，很容易在源码中找到对应的特征值。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/5.jpg" alt="5"></p>
+<p>查找交叉引用，定位到这个函数。 应该是一个异步的数据包预处理函数。它对某个接口的<strong>onPush</strong>函数进行了重载。 </p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/6.jpg" alt="6"></p>
+<p>进入箭头指向的函数, 可以看到该数据包使用了<strong>PushFeedEntityPreviews</strong>这个proto类进行解码。</p>
+<p>将解码的数据存到了java的字典里面。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/7.PNG" alt="7"></p>
+<p>进入decode函数，可以看到每个tag值对应哪些字段。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/8.PNG" alt="8"></p>
+<p>后续则是根据proto类的结构，自己编写payload解码脚本就行了。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/%E9%80%86%E5%90%91/" rel="tag"># 逆向</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2022/09/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E7%A0%81/" rel="next" title="飞书网页版抓包与解码">
+                <i class="fa fa-chevron-left"></i> 飞书网页版抓包与解码
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/" rel="prev" title="C++栈溢出">
+                C++栈溢出 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name"></p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">11</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">6</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#HTTPs%E6%8A%93%E5%8C%85"><span class="nav-number">1.</span> <span class="nav-text">HTTPs抓包</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BB%95%E5%BC%80%E8%AF%81%E4%B9%A6%E6%A0%A1%E9%AA%8C"><span class="nav-number">2.</span> <span class="nav-text">绕开证书校验</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Protobuf%E8%A7%A3%E7%A0%81"><span class="nav-number">3.</span> <span class="nav-text">Protobuf解码</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">丘新云</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Pisces</a> v5.1.4</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.4"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

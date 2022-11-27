@@ -241,7 +241,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2022/11/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E5%AF%86/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/27/%E6%9F%90%E7%BD%91%E6%B8%B8%E6%95%B0%E6%8D%AE%E5%8C%85%E8%A7%A3%E5%AF%86/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="">
@@ -260,7 +260,7 @@
         
           <h1 class="post-title" itemprop="name headline">
                 
-                <a class="post-title-link" href="/2022/11/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E5%AF%86/" itemprop="url">飞书网页版抓包与解密</a></h1>
+                <a class="post-title-link" href="/2022/10/27/%E6%9F%90%E7%BD%91%E6%B8%B8%E6%95%B0%E6%8D%AE%E5%8C%85%E8%A7%A3%E5%AF%86/" itemprop="url">某网游TCP数据包解密</a></h1>
         
 
         <div class="post-meta">
@@ -272,8 +272,609 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-11-01T20:15:59+08:00">
-                2022-11-01
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-27T16:23:15+08:00">
+                2022-10-27
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <p>TCP是网游常用的传输协议。不同于HTTP的数据负载，TCP的数据负载通常是<strong>某个结构体序列化后的二进制数据</strong>。<br>不过，这些数据对应的编码和解码函数肯定也在客户端里。那么重点就是找到这些函数，编写自己的解码脚本。</p>
+<p>首先简单抓包一下，可以发现这些数据包头4个字节都是<strong>4D 5A</strong>。</p>
+<p><img src="/2022/10/27/%E6%9F%90%E7%BD%91%E6%B8%B8%E6%95%B0%E6%8D%AE%E5%8C%85%E8%A7%A3%E5%AF%86/1.png" alt="1"></p>
+<p>通过frida注入进程动态调试，在send和recv函数下断点，打印调用栈。最后找到Communicate.dll@SendToPeer</p>
+<p>使用IDA打开Communicate.dll，查看导出函数表。</p>
+<p><img src="/2022/10/27/%E6%9F%90%E7%BD%91%E6%B8%B8%E6%95%B0%E6%8D%AE%E5%8C%85%E8%A7%A3%E5%AF%86/2.jpg" alt="2"></p>
+<p>进入SendToPeer函数，最后可以找到一个函数里面有大量分支判断语句。</p>
+<p><img src="/2022/10/27/%E6%9F%90%E7%BD%91%E6%B8%B8%E6%95%B0%E6%8D%AE%E5%8C%85%E8%A7%A3%E5%AF%86/3.png" alt="3"></p>
+<p>随便进入一个分支的处理函数,例如case 14, 查看反编译后的c伪代码。</p>
+<p>发现<strong>77 90</strong>两个关键数字。它们其实就是<strong>4D 5A</strong>的十进制。</p>
+<p><img src="/2022/10/27/%E6%9F%90%E7%BD%91%E6%B8%B8%E6%95%B0%E6%8D%AE%E5%8C%85%E8%A7%A3%E5%AF%86/4.png" alt="4"></p>
+<p>经过一段时间对反编译代码的分析，可以总结出它们数据包的结构。如下图所示：</p>
+<p><img src="/2022/10/27/%E6%9F%90%E7%BD%91%E6%B8%B8%E6%95%B0%E6%8D%AE%E5%8C%85%E8%A7%A3%E5%AF%86/5.png" alt="5"></p>
+<p>根据以上结构，可以写出相应的收包解码脚本。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">function</span> <span class="title function_">decodePacket</span>(<span class="params">hex</span>) &#123;</span><br><span class="line">  <span class="comment">//将16进制字符串转换为字节数组</span></span><br><span class="line">  <span class="keyword">var</span> t = <span class="title function_">toUint8Array</span>(hex);</span><br><span class="line">  <span class="keyword">var</span> buf = t.<span class="property">buffer</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">//由于头部是10字节，如果小于10字节那么可能是出现了分包。</span></span><br><span class="line">  <span class="keyword">if</span>(buf.<span class="property">byteLength</span> &lt; <span class="number">10</span>) &#123;</span><br><span class="line">    <span class="variable language_">console</span>.<span class="title function_">error</span>(<span class="string">&quot;byteLength &lt; 10&quot;</span>,hex);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">var</span> v = <span class="keyword">new</span> <span class="title class_">DataView</span>(buf, <span class="number">0</span>, buf.<span class="property">byteLength</span>);</span><br><span class="line"></span><br><span class="line">  <span class="comment">//取出头2个字节，判断是否为4D 5A</span></span><br><span class="line">  <span class="keyword">var</span> r = v.<span class="title function_">getUint16</span>(<span class="number">2</span>);</span><br><span class="line">  <span class="keyword">if</span>(r!=<span class="number">0x4D5A</span>)&#123;</span><br><span class="line">    <span class="variable language_">console</span>.<span class="title function_">error</span>(<span class="string">&quot;4D 5A not found&quot;</span>,hex);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">//获取数据</span></span><br><span class="line">  <span class="keyword">var</span> buf = <span class="keyword">new</span> <span class="title class_">DataView</span>(buf, <span class="number">10</span>, buf.<span class="property">byteLength</span> - <span class="number">10</span>);</span><br><span class="line">  <span class="comment">//获取操作码</span></span><br><span class="line">  <span class="keyword">var</span> cmd = buf.<span class="title function_">getUint16</span>(<span class="number">0</span>);</span><br><span class="line">  <span class="comment">//获取操作码的定义</span></span><br><span class="line">  <span class="keyword">var</span> msg = <span class="title class_">MsgDefine</span>.<span class="title function_">toMsg</span>(cmd);</span><br><span class="line">  <span class="comment">//解析payload</span></span><br><span class="line">  <span class="keyword">var</span> d = <span class="title function_">parse</span>(buf); </span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> &#123;<span class="string">&quot;msg&quot;</span>:msg, <span class="string">&quot;cmd&quot;</span>:cmd, ,<span class="string">&quot;data&quot;</span>:<span class="title function_">gfToJsonString</span>(d.<span class="property">data</span>)&#125;;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>关于payload的二进制解析，其实就是根据操作码，找到对应的分支函数，上面提到的case 14，14就是操作码。</p>
+<p>以下是我总结的一部分，操作码以及相应的解码函数。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    <span class="attr">MSG_APPEAR</span>:<span class="number">61533</span>,</span><br><span class="line">    <span class="attr">MSG_DISAPPEAR</span>:<span class="number">4287</span>,</span><br><span class="line">    <span class="attr">CMD_APEX</span>:<span class="number">6913</span>,</span><br><span class="line">    <span class="attr">CMD_CLOSE_MENU</span>:<span class="number">4450</span>,</span><br><span class="line">    ...</span><br><span class="line">    ...</span><br><span class="line">    <span class="attr">MSG_EXITS</span>:<span class="number">57347</span>,</span><br><span class="line">    <span class="attr">MSG_PERMISSION</span>:<span class="number">6659</span>,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">MSG_APPEAR</span>: <span class="keyword">function</span> (<span class="params"></span>) &#123;</span><br><span class="line">  <span class="keyword">var</span> data = <span class="keyword">new</span> <span class="title class_">UtilMapping</span>();</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;id&quot;</span>, <span class="title function_">getLong</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;x&quot;</span>, <span class="title function_">getUShort</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;y&quot;</span>, <span class="title function_">getUShort</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;dir&quot;</span>, <span class="title function_">getUShort</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;weapon_icon&quot;</span>, <span class="title function_">getLong</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;type&quot;</span>, <span class="title function_">getLong</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;login_with_phone&quot;</span>, <span class="title function_">getByte</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;owner_id&quot;</span>, <span class="title function_">getLong</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;leader_id&quot;</span>, <span class="title function_">getLong</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;status&quot;</span>, <span class="title function_">getLong</span>());</span><br><span class="line">  <span class="keyword">return</span> data;</span><br><span class="line">&#125;,</span><br><span class="line">...</span><br><span class="line"><span class="attr">MSG_TEAM_MOVED</span>: <span class="keyword">function</span> (<span class="params"></span>) &#123;</span><br><span class="line">  <span class="keyword">var</span> data = <span class="keyword">new</span> <span class="title class_">UtilMapping</span>();</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;id&quot;</span>, <span class="title function_">getLong</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;x&quot;</span>, <span class="title function_">getUShort</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;y&quot;</span>, <span class="title function_">getUShort</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;map_id&quot;</span>, <span class="title function_">getLong</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;map_index&quot;</span>, <span class="title function_">getLong</span>());</span><br><span class="line">  data.<span class="title function_">set</span>(<span class="string">&quot;map_name&quot;</span>, <span class="title function_">getByteString</span>());</span><br><span class="line">  <span class="keyword">return</span> data;</span><br><span class="line">&#125;,</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>解码成功。</p>
+<p><img src="/2022/10/27/%E6%9F%90%E7%BD%91%E6%B8%B8%E6%95%B0%E6%8D%AE%E5%8C%85%E8%A7%A3%E5%AF%86/6.png" alt="6"></p>
+<p>如果想要发包的话，流程和收包大致相反。但是关键一点在于校验码的生成。</p>
+<p>这里直接贴上趴下来的校验码算法。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">function</span> <span class="title function_">calculateCheckSum</span>(<span class="params">t</span>) &#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">var</span> e = <span class="number">0</span>, n = <span class="number">0</span>; n &lt; t.<span class="property">byteLength</span>; ++n) &#123;</span><br><span class="line">      e += (<span class="number">1</span> + (<span class="number">127</span> &amp; e)) * t[n];</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> <span class="number">65535</span> &amp; e;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/15/Windows%E7%9A%84sockets%E5%B0%81%E5%8C%85%E6%8B%A6%E6%88%AA/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="QXY‘s blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2022/10/15/Windows%E7%9A%84sockets%E5%B0%81%E5%8C%85%E6%8B%A6%E6%88%AA/" itemprop="url">Windows的sockets封包拦截</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-15T20:16:54+08:00">
+                2022-10-15
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h3 id="介绍"><a href="#介绍" class="headerlink" title="介绍"></a>介绍</h3><p>Windows和需要执行TCP&#x2F;IP网络通信的应用程序会调用动态链接库<strong>ws2_32.dll</strong>。<br>常用的发包函数有<em>send</em>和<em>wsa_send</em>,收包有<em>recv</em>和<em>wsa_recv</em>等等。</p>
+<p>这里主要采用frida框架对进程注入hook脚本。</p>
+<h3 id="send与WSASend的区别"><a href="#send与WSASend的区别" class="headerlink" title="send与WSASend的区别"></a>send与WSASend的区别</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">send</span><span class="params">(SOCKET s, <span class="type">const</span> <span class="type">char</span> *buf, <span class="type">int</span> len, <span class="type">int</span> flags)</span></span></span><br><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">WSASend</span><span class="params">(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesSent ...)</span></span></span><br></pre></td></tr></table></figure>
+<p>其中，send的buf是指向用户缓冲区的指针，len代表用户缓冲区长度。</p>
+<p>而WSASend的lpBuffers是指向 WSABUF 结构的数组的指针,dwBufferCount代表这个数组的大小。 WSABUF包含了一个用户缓冲区的指针和其对应的长度。</p>
+<p>也就是说，send每次只能发送一个用户缓冲区的数据，而WSASend可以发送多个用户缓冲区的数据。</p>
+<p>每次调用send都会导致用户态向内核态的切换。当发送大量数据的时候，WSASend有更少的切换次数，从而有更高的效率。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">_WSABUF</span> &#123;</span><br><span class="line">  ULONG len;</span><br><span class="line">  CHAR  *buf;</span><br><span class="line">&#125; WSABUF, *LPWSABUF;</span><br></pre></td></tr></table></figure>
+
+<p>根据函数的参数定义，从而写出这两个函数的hook脚本。</p>
+<p>send发包的hook脚本</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="title class_">Interceptor</span>.<span class="title function_">attach</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;send&quot;</span>), &#123;</span><br><span class="line">    <span class="attr">onEnter</span>: <span class="keyword">function</span>(<span class="params">args</span>) &#123;</span><br><span class="line">        <span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+] Hooked ws2_32.dll@send&quot;</span>);</span><br><span class="line">        <span class="keyword">var</span> fd = args[<span class="number">0</span>];</span><br><span class="line">        <span class="keyword">var</span> buf = <span class="title function_">ptr</span>(args[<span class="number">1</span>]);</span><br><span class="line">        <span class="keyword">var</span> len = args[<span class="number">2</span>].<span class="title function_">toInt32</span>();</span><br><span class="line">        <span class="keyword">var</span> flag = args[<span class="number">3</span>];</span><br><span class="line">        <span class="keyword">var</span> data = <span class="title class_">Memory</span>.<span class="title function_">readByteArray</span>(buf, len);</span><br><span class="line">        <span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;hex:&quot;</span>,<span class="title function_">buf2hex</span>(data));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+<p>WSASend的hook脚本</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="title class_">Interceptor</span>.<span class="title function_">attach</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;WSASend&quot;</span>), &#123;</span><br><span class="line">    <span class="attr">onEnter</span>: <span class="keyword">function</span>(<span class="params">args</span>) &#123;</span><br><span class="line">        <span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+] Hookedws2_32.dll@WSASend&quot;</span>);</span><br><span class="line">        <span class="keyword">var</span> fd = args[<span class="number">0</span>];</span><br><span class="line">        <span class="keyword">var</span> lpBuffers = <span class="title function_">ptr</span>(args[<span class="number">1</span>]);</span><br><span class="line">        <span class="keyword">var</span> dwBufferCount = args[<span class="number">2</span>].<span class="title function_">toInt32</span>();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span>(<span class="keyword">var</span> i=<span class="number">0</span>;i&lt;dwBufferCount;i++)&#123;</span><br><span class="line">            <span class="keyword">var</span> wsabuf = lpBuffers.<span class="title function_">add</span>(i*<span class="number">8</span>); </span><br><span class="line">            <span class="keyword">var</span> len = wsabuf.<span class="title function_">readUInt</span>();</span><br><span class="line">            <span class="keyword">var</span> buf = <span class="title function_">ptr</span>(wsabuf.<span class="title function_">add</span>(<span class="number">4</span>).<span class="title function_">readUInt</span>());</span><br><span class="line">            <span class="keyword">var</span> data = <span class="title class_">Memory</span>.<span class="title function_">readByteArray</span>(buf_ptr, len);</span><br><span class="line">            <span class="variable language_">console</span>.<span class="title function_">log</span>(data);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+<h3 id="recv函数"><a href="#recv函数" class="headerlink" title="recv函数"></a>recv函数</h3><p>值得注意的是recv函数和send函数的拦截思路是不同的。<br>此时的len是指用户缓冲区的大小，<strong>并非接收数据包的大小</strong>。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">recv</span><span class="params">(SOCKET s, <span class="type">char</span> *buf, <span class="type">int</span> len, <span class="type">int</span> flags)</span></span></span><br></pre></td></tr></table></figure>
+<p>所以在onEnter阶段进行hook是不行的，此时还不知道数据包有多大。</p>
+<p>只有在onLeave阶段才行，这个时候内核已经完成了数据的拷贝操作，即在内核的socket接收缓存区的数据包拷贝到用户缓冲区（buf指针）。</p>
+<p>数据包的大小就是它的返回值。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> recvBuf;</span><br><span class="line"><span class="title class_">Interceptor</span>.<span class="title function_">attach</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;recv&quot;</span>), &#123;</span><br><span class="line">    <span class="attr">onEnter</span>: <span class="keyword">function</span>(<span class="params">args</span>) &#123;</span><br><span class="line">        recvBuf = args[<span class="number">1</span>];</span><br><span class="line">    &#125;,</span><br><span class="line">    <span class="attr">onLeave</span>: <span class="keyword">function</span>(<span class="params">ret</span>) &#123;</span><br><span class="line">        <span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+] Hookedws2_32.dll@recv&quot;</span>);</span><br><span class="line">        <span class="keyword">var</span> dataLen= ret.<span class="title function_">toInt32</span>(); </span><br><span class="line">        <span class="keyword">if</span>(dataLen &gt; <span class="number">0</span>)&#123;</span><br><span class="line">            <span class="keyword">var</span> data = <span class="title class_">Memory</span>.<span class="title function_">readByteArray</span>(recvBuf, dataLen);</span><br><span class="line">           <span class="variable language_">console</span>.<span class="title function_">log</span>(data);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<h3 id="Ip地址和端口的获取"><a href="#Ip地址和端口的获取" class="headerlink" title="Ip地址和端口的获取"></a>Ip地址和端口的获取</h3><p>IP和port是存放在<strong>sockaddr</strong>或<strong>sockaddr_in</strong>中的。两个大小都是16字节。<br>其中端口占2字节、地址占4字节。偏移位置也是一样的。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">sockaddr</span> &#123;</span><br><span class="line">        ushort  sa_family;</span><br><span class="line">        <span class="type">char</span>    sa_data[<span class="number">14</span>];</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">sockaddr_in</span> &#123;</span><br><span class="line">        <span class="type">short</span>   sin_family;</span><br><span class="line">        u_short sin_port;</span><br><span class="line">        <span class="keyword">struct</span>  <span class="title class_">in_addr</span> sin_addr;</span><br><span class="line">        <span class="type">char</span>    sin_zero[<span class="number">8</span>];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>然而无论是发包函数还是收包函数，它们的传参并没有<strong>sockaddr</strong>结构体的指针。<br>也就是没法直接获取地址和端口信息。</p>
+<p>ws2_32.dll提供了两个函数<strong>getsockname</strong>和<strong>getpeername</strong>通过socket的文件描述符来检索对应的sockaddr指针。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">getsockname</span><span class="params">(SOCKET s, <span class="keyword">struct</span> sockaddr *name, <span class="type">int</span> *namelen)</span></span></span><br><span class="line"><span class="function"><span class="type">int</span> __stdcall <span class="title">getpeername</span><span class="params">(SOCKET s, <span class="keyword">struct</span> sockaddr *name, <span class="type">int</span> *namelen)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>name是指在用户区分配的sockaddr结构体，namelen一般都是16。</p>
+<p>调用getsockname后name指向的sockaddr里的数据将会更新成本地端的sockaddr信息。也就是获得了该socket本地的ip和端口。</p>
+<p>调用getpeername则是获取对端的ip和端口。</p>
+<p>那么，可以在注入进程的前提下，主动调用这两个函数获取socket两端的ip和端口信息。</p>
+<p>之所以要注入进程，是因为<strong>不同进程的文件描述符是独立的</strong>。</p>
+<p><strong>注意sockaddr里的port和address都是大端存储的</strong>。编写frida脚本只能用readByteArray不能用readInt。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> getsockname = <span class="keyword">new</span> <span class="title class_">NativeFunction</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;getsockname&quot;</span>), <span class="string">&#x27;int&#x27;</span>, [<span class="string">&#x27;int&#x27;</span>,<span class="string">&#x27;pointer&#x27;</span>,<span class="string">&#x27;pointer&#x27;</span>]);</span><br><span class="line"><span class="keyword">const</span> getpeername = <span class="keyword">new</span> <span class="title class_">NativeFunction</span>(<span class="title class_">Module</span>.<span class="title function_">findExportByName</span>(<span class="string">&quot;ws2_32.dll&quot;</span>, <span class="string">&quot;getpeername&quot;</span>), <span class="string">&#x27;int&#x27;</span>, [<span class="string">&#x27;int&#x27;</span>,<span class="string">&#x27;pointer&#x27;</span>,<span class="string">&#x27;pointer&#x27;</span>]);</span><br><span class="line"></span><br><span class="line"><span class="keyword">var</span> getPeerName = <span class="keyword">function</span>(<span class="params">fd</span>) &#123;</span><br><span class="line">    <span class="keyword">var</span> sockaddr = <span class="title class_">Memory</span>.<span class="title function_">alloc</span>(<span class="number">16</span>);</span><br><span class="line">    <span class="keyword">var</span> len = <span class="title class_">Memory</span>.<span class="title function_">alloc</span>(<span class="number">4</span>);</span><br><span class="line">    len.<span class="title function_">writeInt</span>(<span class="number">16</span>);</span><br><span class="line">    <span class="title function_">getpeername</span>(fd,sockaddr,len);</span><br><span class="line">    <span class="keyword">var</span> port = (sockaddr.<span class="title function_">add</span>(<span class="number">2</span>)).<span class="title function_">readByteArray</span>(<span class="number">2</span>)；</span><br><span class="line">    <span class="keyword">var</span> address = (sockaddr.<span class="title function_">add</span>(<span class="number">4</span>)).<span class="title function_">readByteArray</span>(<span class="number">4</span>)；</span><br><span class="line">    <span class="keyword">return</span> &#123;<span class="string">&#x27;address&#x27;</span>:address,<span class="string">&#x27;port&#x27;</span>:port&#125;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="keyword">var</span> getSocktName = <span class="keyword">function</span>(<span class="params">fd</span>)&#123;</span><br><span class="line">    <span class="keyword">var</span> sockaddr = <span class="title class_">Memory</span>.<span class="title function_">alloc</span>(<span class="number">16</span>);</span><br><span class="line">    <span class="keyword">var</span> len = <span class="title class_">Memory</span>.<span class="title function_">alloc</span>(<span class="number">4</span>);</span><br><span class="line">    len.<span class="title function_">writeInt</span>(<span class="number">16</span>);</span><br><span class="line">    <span class="title function_">getsockname</span>(fd,sockaddr,len);</span><br><span class="line">    <span class="keyword">var</span> port = <span class="built_in">parseInt</span>(<span class="title function_">buf2hex</span>((sockaddr.<span class="title function_">add</span>(<span class="number">2</span>)).<span class="title function_">readByteArray</span>(<span class="number">2</span>)),<span class="number">16</span>);</span><br><span class="line">    <span class="keyword">var</span> address = <span class="title function_">buf2dec</span>((sockaddr.<span class="title function_">add</span>(<span class="number">4</span>)).<span class="title function_">readByteArray</span>(<span class="number">4</span>),<span class="string">&#x27;.&#x27;</span>);</span><br><span class="line">    <span class="keyword">return</span> &#123;<span class="string">&#x27;address&#x27;</span>:address,<span class="string">&#x27;port&#x27;</span>:port&#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="结尾"><a href="#结尾" class="headerlink" title="结尾"></a>结尾</h3><p>根据以上思路，自己就可以写一个win平台的socket抓包工具。</p>
+<p><img src="/2022/10/15/Windows%E7%9A%84sockets%E5%B0%81%E5%8C%85%E6%8B%A6%E6%88%AA/1.PNG" alt="1"></p>
+<p>目前只实现了简单的socket抓包功能和数据检索功能。<br>更多的功能还要等后面继续完善。</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="QXY‘s blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/" itemprop="url">C++栈溢出</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-09-25T20:30:57+08:00">
+                2022-09-25
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h3 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h3><p>当执行call指令调用函数的时候，除了修改rip为函数的地址，也会将下一条指令地址（返回地址）保存在栈中。接着保存调用函数前的rbp的值，并将rbp的值调整到rsp。接着将rsp减去一定的大小，开辟出一段栈空间，用来保存局部变量，rsp就是栈顶，rbp就是栈底。如图所示：</p>
+<p><img src="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/1.png" alt="1"></p>
+<p>由上图可知，保存返回地址和原rbp的栈地址是紧跟在局部变量后面的。</p>
+<p>如果函数没有对用户输入的数据长度进行验证，就将输入的数据保存在局部变量中，就很有可能导致输入的数据覆盖掉返回地址。这样，就导致了返回地址被修改。</p>
+<h3 id="实验"><a href="#实验" class="headerlink" title="实验"></a>实验</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span><span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">test</span><span class="params">(<span class="type">char</span>* input)</span></span>&#123;</span><br><span class="line">    <span class="type">char</span> buf[<span class="number">8</span>] = &#123; <span class="number">0</span> &#125;;</span><br><span class="line">    <span class="built_in">strcpy</span>(buf, input);</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span></span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 模拟用户输入</span></span><br><span class="line">    <span class="type">char</span> userInput[<span class="number">0x100</span>] = <span class="string">&quot;QIU12345&quot;</span>;</span><br><span class="line">    <span class="built_in">test</span>(userInput);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>以下是对应的汇编代码，在0x4015c2下断点，也就是调用test函数的时候。</p>
+<p><img src="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/3.PNG" alt="2"></p>
+<p>进入0x401550后，首先把返回地址0x4015c7压入栈。</p>
+<p><img src="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/2.png" alt="3"></p>
+<p>接着，把原rbp压入栈，并更新rbp为rsp，调整rsp+48，即分配了48字节的栈空间。</p>
+<p>执行完strcpy函数以后，数组中的元素都变成了3534333231554951，也就是字符’QIU12345’对应的asci码值。</p>
+<p><img src="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/5.jpg" alt="5"></p>
+<p>因为输入数据的长度没有数组buf的大小(8字节)，因此，原rbp和返回地址并没有被覆盖掉，函数可以正常返回到调用函数的指令的下一条指令开始正常运行。</p>
+<p>但是，如果此时输入数据的长度超过局部变量数组的长度的话，输入数据就会将rbp以及返回地址覆盖掉。</p>
+<p>接下来，假如用户输入的数据是32字节，这样就可以刚好覆盖掉原rbp和返回地址。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span><span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">test</span><span class="params">(<span class="type">char</span>* input)</span></span>&#123;</span><br><span class="line">    <span class="type">char</span> buf[<span class="number">8</span>] = &#123; <span class="number">0</span> &#125;;</span><br><span class="line">    <span class="built_in">strcpy</span>(buf, input);</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span></span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 模拟用户输入</span></span><br><span class="line">    <span class="type">char</span> userInput[<span class="number">0x100</span>] = <span class="string">&quot;QIU12345xxxxxxxxoooooooo&quot;</span>; <span class="comment">//24字节</span></span><br><span class="line">    <span class="built_in">test</span>(userInput);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>覆盖前的栈中的原rbp值和返回地址。</p>
+<p><img src="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/6.jpg" alt="6"></p>
+<p>覆盖后的栈中的原rbp值和返回地址。</p>
+<p><img src="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/7.png" alt="7"></p>
+<p>可以看到原rbp值被覆盖为7878787878787878,也就是oooooooo。返回地址被覆盖为6f6f6f6f6f6f6f6f(xxxxxxxx)。</p>
+<p>后面运行报错，因为6f6f6f6f6f6f6f6f并不是个合法的地址。</p>
+<h3 id="控制RIP"><a href="#控制RIP" class="headerlink" title="控制RIP"></a>控制RIP</h3><p>通过栈溢出这个漏洞，其实可以实现RIP的控制，从而控制程序的执行流。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span></span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 模拟用户输入</span></span><br><span class="line">    <span class="type">char</span> userInput[<span class="number">0x100</span>] = &#123;</span><br><span class="line">        <span class="number">1</span>,<span class="number">1</span>,<span class="number">1</span>,<span class="number">1</span>,<span class="number">1</span>,<span class="number">1</span>,<span class="number">1</span>,<span class="number">1</span>, <span class="comment">//buf数组</span></span><br><span class="line">        <span class="number">2</span>,<span class="number">2</span>,<span class="number">2</span>,<span class="number">2</span>,<span class="number">2</span>,<span class="number">2</span>,<span class="number">2</span>,<span class="number">2</span>, <span class="comment">//覆盖原rbp</span></span><br><span class="line">        (<span class="type">char</span>)<span class="number">0xF8</span>,<span class="number">0x15</span>,<span class="number">0x40</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">0</span>,<span class="number">0</span> <span class="comment">//控制返回地址为 0x4015F8</span></span><br><span class="line">    &#125;;</span><br><span class="line">    <span class="built_in">test</span>(userInput);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>被覆盖后的栈空间</p>
+<p><img src="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/8.png" alt="8"></p>
+<p>继续运行，可以看出rip已经篡改成0x4015F8。</p>
+<p>其实0x4015F8是test函数的入口地址，这样就使得程序一直循环执行test函数了。</p>
+<p><img src="/2022/09/25/C-%E6%A0%88%E6%BA%A2%E5%87%BA/9.png" alt="9"></p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="QXY‘s blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/" itemprop="url">飞书安卓逆向分析</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-09-06T14:35:48+08:00">
+                2022-09-06
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h3 id="HTTPs抓包"><a href="#HTTPs抓包" class="headerlink" title="HTTPs抓包"></a>HTTPs抓包</h3><p>一般来说，HTTPs可以采用中间人代理获取到会话密钥，从而能够解密https数据包。</p>
+<p>但是，飞书安卓app采用了证书固定（ssl-pinning），客户端也会对证书进行校验，代理软件的证书会校验失败，导致tls握手失败。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/0.jpg" alt="0"></p>
+<h3 id="绕开证书校验"><a href="#绕开证书校验" class="headerlink" title="绕开证书校验"></a>绕开证书校验</h3><p>使用jadx进行反编译分析，检索到几个常见的证书校验相关的类。<br>对相关的校验函数进行hook，关键是替换校验的证书为自定义的代理证书。</p>
+<p>以下是替换自定义证书的frida的脚本。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="title class_">Java</span>.<span class="title function_">perform</span>(<span class="keyword">function</span> (<span class="params"></span>)&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">CertificateFactory</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.security.cert.CertificateFactory&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">FileInputStream</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.io.FileInputStream&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">BufferedInputStream</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.io.BufferedInputStream&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> X509Certificate = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.security.cert.X509Certificate&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">KeyStore</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;java.security.KeyStore&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">TrustManagerFactory</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;javax.net.ssl.TrustManagerFactory&quot;</span>);</span><br><span class="line">    <span class="keyword">var</span> <span class="title class_">SSLContext</span> = <span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;javax.net.ssl.SSLContext&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 加载本地证书，前提将代理证书放到相应的目录</span></span><br><span class="line">    <span class="keyword">var</span> cf = <span class="title class_">CertificateFactory</span>.<span class="title function_">getInstance</span>(<span class="string">&quot;X.509&quot;</span>);</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">    	<span class="keyword">var</span> fileInputStream = <span class="title class_">FileInputStream</span>.$new(<span class="string">&quot;/data/local/tmp/cert-der.crt&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">catch</span>(err) &#123;</span><br><span class="line">    	<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[o] &quot;</span> + err);</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">var</span> bufferedInputStream = <span class="title class_">BufferedInputStream</span>.$new(fileInputStream);</span><br><span class="line">  	<span class="keyword">var</span> ca = cf.<span class="title function_">generateCertificate</span>(bufferedInputStream);</span><br><span class="line">    bufferedInputStream.<span class="title function_">close</span>();</span><br><span class="line">	<span class="keyword">var</span> certInfo = <span class="title class_">Java</span>.<span class="title function_">cast</span>(ca, X509Certificate);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 创建KeyStore实例</span></span><br><span class="line">    <span class="keyword">var</span> keyStoreType = <span class="title class_">KeyStore</span>.<span class="title function_">getDefaultType</span>();</span><br><span class="line">    <span class="keyword">var</span> keyStore = <span class="title class_">KeyStore</span>.<span class="title function_">getInstance</span>(keyStoreType);</span><br><span class="line">    keyStore.<span class="title function_">load</span>(<span class="literal">null</span>, <span class="literal">null</span>);</span><br><span class="line">    keyStore.<span class="title function_">setCertificateEntry</span>(<span class="string">&quot;ca&quot;</span>, ca);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 自定义TrustManager，</span></span><br><span class="line">    <span class="keyword">var</span> tmfAlgorithm = <span class="title class_">TrustManagerFactory</span>.<span class="title function_">getDefaultAlgorithm</span>();</span><br><span class="line">    <span class="keyword">var</span> tmf = <span class="title class_">TrustManagerFactory</span>.<span class="title function_">getInstance</span>(tmfAlgorithm);</span><br><span class="line">    tmf.<span class="title function_">init</span>(keyStore);</span><br><span class="line"></span><br><span class="line">       <span class="comment">//对SSLContext进行重载</span></span><br><span class="line">       <span class="comment">//app 唤醒SSLContext时将会调用 自定义好的TrustManager</span></span><br><span class="line">   	<span class="title class_">SSLContext</span>.<span class="property">init</span>.<span class="title function_">overload</span>(<span class="string">&quot;[Ljavax.net.ssl.KeyManager;&quot;</span>, <span class="string">&quot;[Ljavax.net.ssl.TrustManager;&quot;</span>, <span class="string">&quot;java.security.SecureRandom&quot;</span>).<span class="property">implementation</span> = <span class="keyword">function</span>(<span class="params">a,b,c</span>) &#123;</span><br><span class="line">   		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[o] App invoked javax.net.ssl.SSLContext.init...&quot;</span>);</span><br><span class="line">   		<span class="title class_">SSLContext</span>.<span class="property">init</span>.<span class="title function_">overload</span>(<span class="string">&quot;[Ljavax.net.ssl.KeyManager;&quot;</span>, <span class="string">&quot;[Ljavax.net.ssl.TrustManager;&quot;</span>, <span class="string">&quot;java.security.SecureRandom&quot;</span>).<span class="title function_">call</span>(<span class="variable language_">this</span>, a, tmf.<span class="title function_">getTrustManagers</span>(), c);</span><br><span class="line">   		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+] SSLContext initialized with our custom TrustManager!&quot;</span>);</span><br><span class="line">   	&#125;</span><br><span class="line">   &#125;);</span><br></pre></td></tr></table></figure>
+
+<p>之后可以使用charles正常抓取https包，数据包的类型主要是protobuf。<br>下一步则是要对protobuf进行解码。<br><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/1.jpg" alt="1"></p>
+<h3 id="Protobuf解码"><a href="#Protobuf解码" class="headerlink" title="Protobuf解码"></a>Protobuf解码</h3><p>Protobuf解码主要是获取tag值信息，需要根据每个proto对象的配置文件，才能找到tag值对应哪个key。</p>
+<p>所以这需要对java代码的反编译。</p>
+<p>首先，通过注入进程断点打印调用栈，找到了两个proto相关的类路径，<em>com.ss.android.lark.pb</em>和<em>com.bytedance.lark.pb</em>。</p>
+<p>查看smali反编译的伪代码，每个接口的proto数据包外层都被两类proto结构<strong>Packet</strong>所包裹者。<br><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/2.PNG" alt="2"></p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/3.PNG" alt="3"></p>
+<p>其中<strong>cmd</strong>用于标识api接口的特征值，<strong>command</strong>存放api的名字（但是发包时候并不会携带command）,<strong>payload</strong>是存放api接口所需要的proto对象的序列化后的二进制数据，</p>
+<p>通过对这两个<strong>Packet</strong>的构造函数进行hook。</p>
+<figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;com.ss.android.lark.pb.improto.Packet&quot;</span>).<span class="property">$init</span>.<span class="title function_">overload</span>(<span class="string">&#x27;java.lang.String&#x27;</span>,<span class="string">&#x27;com.ss.	android.lark.pb.improto.PayloadType&#x27;</span>,</span><br><span class="line">	<span class="string">&#x27;com.ss.android.lark.pb.improto.Command&#x27;</span>,<span class="string">&#x27;java.lang.Integer&#x27;</span>,<span class="string">&#x27;okio.ByteString&#x27;</span>,<span class="string">&#x27;java.lang.String&#x27;</span>,</span><br><span class="line">	<span class="string">&#x27;com.ss.android.lark.pb.improto.PipeEntity&#x27;</span>,<span class="string">&#x27;java.util.List&#x27;</span>,<span class="string">&#x27;java.util.List&#x27;</span>,<span class="string">&#x27;java.lang.Integer&#x27;</span>,</span><br><span class="line">	<span class="string">&#x27;java.lang.Integer&#x27;</span>,<span class="string">&#x27;java.lang.Long&#x27;</span>,<span class="string">&#x27;java.util.List&#x27;</span>,<span class="string">&#x27;okio.ByteString&#x27;</span>).<span class="property">implementation</span> = <span class="keyword">function</span>(<span class="params">x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14</span>) </span><br><span class="line">&#123;</span><br><span class="line">	<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+][com.ss.android.lark.pb.improto.Packet]&quot;</span>);</span><br><span class="line">	<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">`cmd: <span class="subst">$&#123;x3&#125;</span>`</span>);</span><br><span class="line">	<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">`payload: <span class="subst">$&#123;x5&#125;</span>`</span>);</span><br><span class="line">	<span class="keyword">return</span> <span class="variable language_">this</span>.$init(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14);</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="title class_">Java</span>.<span class="title function_">use</span>(<span class="string">&quot;com.bytedance.lark.pb.basic.v1.Packet&quot;</span>).<span class="property">$init</span>.<span class="title function_">overload</span>(</span><br><span class="line">	<span class="string">&#x27;com.bytedance.lark.pb.basic.v1.Command&#x27;</span>, <span class="string">&#x27;java.lang.Integer&#x27;</span>, <span class="string">&#x27;java.lang.String&#x27;</span>, </span><br><span class="line">	<span class="string">&#x27;java.lang.String&#x27;</span>, <span class="string">&#x27;java.lang.String&#x27;</span>, <span class="string">&#x27;java.lang.String&#x27;</span>, <span class="string">&#x27;java.lang.Long&#x27;</span>, <span class="string">&#x27;java.lang.Boolean&#x27;</span>, </span><br><span class="line">	<span class="string">&#x27;com.bytedance.lark.pb.basic.v1.Packet$StreamStatus&#x27;</span>, <span class="string">&#x27;java.lang.String&#x27;</span>, <span class="string">&#x27;com.bytedance.lark.pb.basic.v1.Trace&#x27;</span>, </span><br><span class="line">	<span class="string">&#x27;java.lang.Boolean&#x27;</span>, <span class="string">&#x27;okio.ByteString&#x27;</span>,<span class="string">&#x27;okio.ByteString&#x27;</span>).<span class="property">implementation</span> = <span class="keyword">function</span>(<span class="params">x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14</span>)&#123;</span><br><span class="line">		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">&quot;[+][com.bytedance.lark.pb.basic.v1.Packet]&quot;</span>);</span><br><span class="line">		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">`cmd: <span class="subst">$&#123;x1&#125;</span>`</span>);</span><br><span class="line">		<span class="variable language_">console</span>.<span class="title function_">log</span>(<span class="string">`payload: <span class="subst">$&#123;x13&#125;</span>`</span>);</span><br><span class="line">	<span class="keyword">return</span> <span class="variable language_">this</span>.$init(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>之后在app随便操作一下，为了抓取一些Packet数据包。</p>
+<p>其中<strong>cmd</strong>用于标识api接口的特征值，<strong>payload</strong>是存放api接口所需要的proto对象的序列化后的二进制数据。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/4.jpg" alt="4"></p>
+<p>下一步则是要找到payload的解码方法。</p>
+<p>以<em>PUSH_FEED_ENTITY_PREVIEWS</em>为例，通过字符串搜索，很容易在源码中找到对应的特征值。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/5.jpg" alt="5"></p>
+<p>查找交叉引用，定位到这个函数。 应该是一个异步的数据包预处理函数。它对某个接口的<strong>onPush</strong>函数进行了重载。 </p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/6.jpg" alt="6"></p>
+<p>进入箭头指向的函数, 可以看到该数据包使用了<strong>PushFeedEntityPreviews</strong>这个proto类进行解码。</p>
+<p>将解码的数据存到了java的字典里面。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/7.PNG" alt="7"></p>
+<p>进入decode函数，可以看到每个tag值对应哪些字段。</p>
+<p><img src="/2022/09/06/%E9%A3%9E%E4%B9%A6%E5%AE%89%E5%8D%93%E9%80%86%E5%90%91%E5%88%86%E6%9E%90/8.PNG" alt="8"></p>
+<p>后续则是根据proto类的结构，自己编写payload解码脚本就行了。</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/09/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E7%A0%81/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="QXY‘s blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2022/09/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E7%A0%81/" itemprop="url">飞书网页版抓包与解码</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-09-01T20:15:59+08:00">
+                2022-09-01
               </time>
             
 
@@ -329,11 +930,11 @@
 <figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//a:2003</span></span><br><span class="line"><span class="keyword">if</span> (<span class="built_in">isNaN</span>(a))</span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">Error</span>(<span class="string">&quot;transport::callApi invalid cmd: &quot;</span> + e);</span><br><span class="line"><span class="keyword">let</span> result;</span><br><span class="line">r.<span class="property">a</span>.<span class="title function_">info</span>(<span class="string">`transport::callApi:start <span class="subst">$&#123;o || <span class="string">&quot;unknown command&quot;</span>&#125;</span>(<span class="subst">$&#123;a&#125;</span>)`</span>);</span><br><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="comment">//根据特征值，调用api接口</span></span><br><span class="line">    result = <span class="keyword">await</span> <span class="title class_">Object</span>(_.<span class="property">a</span>)(a, t)</span><br><span class="line">&#125; <span class="keyword">catch</span> (e) &#123;</span><br><span class="line">    <span class="keyword">throw</span> r.<span class="property">a</span>.<span class="title function_">info</span>(<span class="string">`transport::callApi:end:error <span class="subst">$&#123;o || <span class="string">&quot;unknown command&quot;</span>&#125;</span>(<span class="subst">$&#123;a&#125;</span>)`</span>),e</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">return</span> r.<span class="property">a</span>.<span class="title function_">info</span>(<span class="string">`transport::callApi:end:success <span class="subst">$&#123;o || <span class="string">&quot;unknown command&quot;</span>&#125;</span>(<span class="subst">$&#123;a&#125;</span>)`</span>), result</span><br></pre></td></tr></table></figure>
 
 <figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//通过2个哈希表，分别正向和反向，存储特征值所映射的命令操作。</span></span><br><span class="line">......</span><br><span class="line">e[e.<span class="property">GET_LOCAL_SEARCH_INFO_HISTORY</span> = <span class="number">1208</span>] = <span class="string">&quot;GET_LOCAL_SEARCH_INFO_HISTORY&quot;</span>,</span><br><span class="line">e[e.<span class="property">SEND_MESSAGE</span> = <span class="number">2003</span>] = <span class="string">&quot;SEND_MESSAGE&quot;</span>,</span><br><span class="line">e[e.<span class="property">GET_ALL_DRAFTS</span> = <span class="number">2004</span>] = <span class="string">&quot;GET_ALL_DRAFTS&quot;</span>,</span><br><span class="line">e[e.<span class="property">CREATE_DRAFT</span> = <span class="number">2005</span>] = <span class="string">&quot;CREATE_DRAFT&quot;</span>,</span><br><span class="line">e[e.<span class="property">GET_CHAT_CHATTERS</span> = <span class="number">2006</span>] = <span class="string">&quot;GET_CHAT_CHATTERS&quot;</span>,</span><br><span class="line">e[e.<span class="property">DELETE_MESSAGES</span> = <span class="number">2007</span>] = <span class="string">&quot;DELETE_MESSAGES&quot;</span>,</span><br><span class="line">e[e.<span class="property">CREATE_CHAT</span> = <span class="number">2008</span>] = <span class="string">&quot;CREATE_CHAT&quot;</span>,</span><br><span class="line">......</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-<h2 id="Protobuf解密"><a href="#Protobuf解密" class="headerlink" title="Protobuf解密"></a>Protobuf解密</h2><p>通过charles进行中间人代理，实现https抓包。</p>
-<p><img src="/2022/11/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E5%AF%86/1.PNG" alt="1"></p>
+<h2 id="Protobuf码"><a href="#Protobuf码" class="headerlink" title="Protobuf码"></a>Protobuf码</h2><p>通过charles进行中间人代理，实现https抓包。</p>
+<p><img src="/2022/09/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E7%A0%81/1.PNG" alt="1"></p>
 <p>对protobuf进行标准通用的解密，可以转换成json格式。虽然能看到value值，但是并不知道key值。</p>
 <p>key值只能通过原<strong>proto文件</strong>，根据tag值找到对应的字段名。</p>
-<p><img src="/2022/11/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E5%AF%86/2.PNG" alt="2"></p>
+<p><img src="/2022/09/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E7%A0%81/2.PNG" alt="2"></p>
 <p>后面也尝试了不同的操作，发现URL路径全都是**<a target="_blank" rel="noopener" href="https://internal-api-lark-api.feishu.cn/im/gateway/**%E3%80%82">https://internal-api-lark-api.feishu.cn/im/gateway/**。</a></p>
 <p>观察发现上图protobuf的第3个tag（value:5）。这个tag应该是指<strong>内部操作码</strong>。通过源码分析，这里的5对应的是<em>PUT_MESSAGE</em>。服务器应该根据这个内部操作码调用相应的处理函数。</p>
 <figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;ACK&quot;</span><span class="punctuation">:</span> <span class="number">1</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;CONNECT&quot;</span><span class="punctuation">:</span> <span class="number">2</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;DISCONNECT&quot;</span><span class="punctuation">:</span> <span class="number">3</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PING&quot;</span><span class="punctuation">:</span> <span class="number">4</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PUT_MESSAGE&quot;</span><span class="punctuation">:</span> <span class="number">5</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PUSH_MESSAGES&quot;</span><span class="punctuation">:</span> <span class="number">6</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PULL_CHAT_MESSAGES&quot;</span><span class="punctuation">:</span> <span class="number">7</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PULL_MESSAGES_BY_IDS&quot;</span><span class="punctuation">:</span> <span class="number">8</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;DELETE_MESSAGE&quot;</span><span class="punctuation">:</span> <span class="number">9</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PULL_MESSAGE_READ_STATE&quot;</span><span class="punctuation">:</span> <span class="number">12</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PUT_CHAT&quot;</span><span class="punctuation">:</span> <span class="number">13</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PUSH_CHATS&quot;</span><span class="punctuation">:</span> <span class="number">18</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PUSH_USERS&quot;</span><span class="punctuation">:</span> <span class="number">21</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PUT_USER&quot;</span><span class="punctuation">:</span> <span class="number">22</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PULL_MESSAGE_REPLIES&quot;</span><span class="punctuation">:</span> <span class="number">23</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PULL_REACTIONS&quot;</span><span class="punctuation">:</span> <span class="number">24</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;PUT_REACTION&quot;</span><span class="punctuation">:</span> <span class="number">25</span><span class="punctuation">,</span></span><br><span class="line">    ......</span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
@@ -360,7 +961,7 @@
 <p>所以，通过这个库也很容易写出解密protobuf的脚本。</p>
 <figure class="highlight js"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> protobuf = <span class="built_in">require</span>(<span class="string">&quot;protobufjs&quot;</span>);</span><br><span class="line"><span class="keyword">const</span> jsonDescriptor = <span class="built_in">require</span>(<span class="string">&quot;./feishu_proto.json&quot;</span>); </span><br><span class="line"><span class="keyword">const</span> root = protobuf.<span class="property">Root</span>.<span class="title function_">fromJSON</span>(jsonDescriptor);</span><br><span class="line"><span class="comment">// input是hex字符串，type是proto类型</span></span><br><span class="line"><span class="keyword">function</span> <span class="title function_">demo</span>(<span class="params">input, type</span>) &#123;</span><br><span class="line">    <span class="keyword">var</span> buffer = <span class="title function_">toUint8Array</span>(input);</span><br><span class="line">    <span class="keyword">var</span> packet = root.<span class="title function_">lookupType</span>(<span class="string">&quot;improto.Packet&quot;</span>).<span class="title function_">decode</span>(buffer);</span><br><span class="line">    <span class="comment">//type: messages.PutMessageRequest</span></span><br><span class="line">    <span class="keyword">var</span> msg = root.<span class="title function_">lookupType</span>(type).<span class="title function_">decode</span>(packet[<span class="string">&#x27;payload&#x27;</span>]);</span><br><span class="line">    <span class="variable language_">console</span>.<span class="title function_">log</span>(msg);</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
 <p>protobuf解密结果</p>
-<p><img src="/2022/11/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E5%AF%86/3.PNG" alt="3"></p>
+<p><img src="/2022/09/01/%E9%A3%9E%E4%B9%A6%E7%BD%91%E9%A1%B5%E7%89%88%E6%8A%93%E5%8C%85%E4%B8%8E%E8%A7%A3%E7%A0%81/3.PNG" alt="3"></p>
 
           
         
@@ -409,7 +1010,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/25/%E9%A3%9E%E4%B9%A6%E9%80%86%E5%90%91-https%E6%8A%93%E5%8C%85%E4%B8%8Eprotobuf%E8%A7%A3%E5%AF%86/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/04/22/docker-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="">
@@ -428,7 +1029,7 @@
         
           <h1 class="post-title" itemprop="name headline">
                 
-                <a class="post-title-link" href="/2022/10/25/%E9%A3%9E%E4%B9%A6%E9%80%86%E5%90%91-https%E6%8A%93%E5%8C%85%E4%B8%8Eprotobuf%E8%A7%A3%E5%AF%86/" itemprop="url">飞书逆向-https抓包与protobuf解密</a></h1>
+                <a class="post-title-link" href="/2022/04/22/docker-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/" itemprop="url">docker-文件系统</a></h1>
         
 
         <div class="post-meta">
@@ -440,8 +1041,8 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-25T14:35:48+08:00">
-                2022-10-25
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-04-22T00:04:11+08:00">
+                2022-04-22
               </time>
             
 
@@ -480,22 +1081,25 @@
       
         
           
-            <h2 id="https抓包"><a href="#https抓包" class="headerlink" title="https抓包"></a>https抓包</h2><ul>
-<li>抓包工具：Charles</li>
-<li>客户端系统：Android10</li>
+            <p>Docker 支持了不同的存储驱动，包括 <code>aufs</code>、<code>devicemapper</code>、<code>overlay2</code>、<code>zfs</code> 和 <code>vfs</code> 等等，在最新的 Docker 中，<code>overlay2</code> 取代了 <code>aufs</code> 成为了推荐的存储驱动，但是在没有 <code>overlay2</code> 驱动的机器上仍然会使用 <code>aufs</code> 作为 Docker 的默认驱动。</p>
+<h2 id="overlayfs"><a href="#overlayfs" class="headerlink" title="overlayfs"></a>overlayfs</h2><ul>
+<li><p>Overlayfs 是一种类似 aufs 的一种堆叠文件系统，于 2014 年正式合入 Linux-3.18 主线内核，</p>
+</li>
+<li><p>它依赖并建立在其它的文件系统之上（例如 ext4fs 和 xfs 等等），并不直接参与磁盘空间结构的划分，仅仅将原来底层文件系统中不同的目录进行“合并”，然后向用户呈现。</p>
+</li>
 </ul>
-<h3 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h3><p>Android7.0 之后默认不信任用户添加到系统的CA证书：</p>
-<blockquote>
-<p>To provide a more consistent and more secure experience across the Android ecosystem, beginning with Android Nougat, compatible devices trust only the standardized system CAs maintained in AOSP.<br>也就是说对基于 SDK24 及以上的APP来说，即使你在手机上安装了抓包工具的证书也无法抓取 https 请求。 </p>
-</blockquote>
-<h3 id="解决方法"><a href="#解决方法" class="headerlink" title="解决方法"></a>解决方法</h3><p><strong>将抓包软件的证书伪装成系统证书</strong></p>
-<p>系统证书目录：<code>/system/etc/security/cacerts/</code></p>
-<p>其中的每个系统证书的命名规则如下：<br> <code>&lt;Certificate_Hash&gt;.&lt;Number&gt;</code></p>
-<p><em>Certificate_Hash</em>可以用下面的命令计算出来：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl x509 -subject_hash_old -in &lt;Certificate_File&gt;</span><br></pre></td></tr></table></figure>
-
-<p>后缀名的数字是为了防止文件名冲突的，默认为0，依次递增。</p>
-<p>将证书进行改名后，放入系统证书目录即可。</p>
+<h2 id="docker应用"><a href="#docker应用" class="headerlink" title="docker应用"></a>docker应用</h2><p>overlay分为lower,upper,merge。</p>
+<ul>
+<li>lower（镜像层）是只读层，用于存放docker共享的image镜像。</li>
+<li>upper（容器层）是读写层，通过commit操作层层堆叠覆盖。</li>
+<li>merge 是两者的合并，做为容器的rootfs。</li>
+</ul>
+<h2 id="关于docker-commit"><a href="#关于docker-commit" class="headerlink" title="关于docker commit"></a>关于docker commit</h2><ul>
+<li>docker commit，实际上就是对运行起来的docker容器，把upper的可读写层，加上原先lower的容器镜像的只读层，打包组成了一个新的镜像。</li>
+<li>lower的只读层在宿主机上是共享的，不会占用额外的空间。</li>
+<li>在容器里对镜像 rootfs 所做的任何修改，都会被操作系统先复制到upper的可读写层，然后再修改，也就是Copy-on-Write。</li>
+<li>在容器里对lower层文件的删除操作是软删除。通过whiteout进行遮挡。因为lower是只读的。</li>
+</ul>
 
           
         
@@ -544,7 +1148,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90-%E7%B1%BB/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/04/21/docker%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1%E5%8E%9F%E7%90%86%E7%AE%80%E5%8D%95%E5%88%86%E6%9E%90/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="">
@@ -563,7 +1167,7 @@
         
           <h1 class="post-title" itemprop="name headline">
                 
-                <a class="post-title-link" href="/2022/10/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90-%E7%B1%BB/" itemprop="url">C++反汇编分析-类</a></h1>
+                <a class="post-title-link" href="/2022/04/21/docker%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1%E5%8E%9F%E7%90%86%E7%AE%80%E5%8D%95%E5%88%86%E6%9E%90/" itemprop="url">docker网络通信原理简单分析</a></h1>
         
 
         <div class="post-meta">
@@ -575,8 +1179,313 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-22T22:18:03+08:00">
-                2022-10-22
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-04-21T21:56:31+08:00">
+                2022-04-21
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>docker容器可以直接使用宿主机的网络栈（–net&#x3D;host），即：不开启 Network Namespace，比如：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">docker run –d –net=host --name nginx-host nginx</span><br></pre></td></tr></table></figure>
+
+<p>在这种情况下，这个容器启动后，直接监听的就是宿主机的 80 端口。</p>
+<p>而所谓“网络栈”，就包括了：网卡（Network Interface）、回环设备（Loopback Device）、路由表（Routing Table）和 iptables 规则。</p>
+<p>像这样直接使用宿主机网络栈的方式，不可避免地引入共享网络资源的问题，比如端口冲突。</p>
+<p>所以，<strong>在大多数情况下，我们都希望容器进程能使用自己网络栈，即拥有属于自己的 IP 地址和端口</strong>。</p>
+<p>那么，<strong>相互隔离的容器进程是怎么样进行通信的呢？</strong></p>
+<h2 id="网桥"><a href="#网桥" class="headerlink" title="网桥"></a>网桥</h2><p>我们可以把容器当作一台主机。</p>
+<p>两台主机之间的通信，就是利用网线连接起来。</p>
+<p>多台主机的通信，则是将网线连在同一台交换机上。</p>
+<p>在Linux中，<strong>网桥（Bridge）</strong>可以起到虚拟交换机的作用。</p>
+<p>Docker服务会在宿主机创建一个名为docker0的网桥，所有docker都可以通过它来进行通信。</p>
+<p>通过ifconfig进行查看：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">(base) zhiqiang@vccserver:~$ ifconfig</span><br><span class="line">docker0: flags=4163&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu 1500</span><br><span class="line">        inet 172.17.0.1  netmask 255.255.0.0  broadcast 172.17.255.255</span><br><span class="line">        inet6 fe80::42:6fff:fe2d:9774  prefixlen 64  scopeid 0x20&lt;<span class="built_in">link</span>&gt;</span><br><span class="line">        ether 02:42:6f:2d:97:74  txqueuelen 0  (Ethernet)</span><br><span class="line">        RX packets 30700116  bytes 295005873644 (295.0 GB)</span><br><span class="line">        RX errors 0  dropped 0  overruns 0  frame 0</span><br><span class="line">        TX packets 125243801  bytes 16398186665 (16.3 GB)</span><br><span class="line">        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0</span><br></pre></td></tr></table></figure>
+<h2 id="Veth-Pair"><a href="#Veth-Pair" class="headerlink" title="Veth Pair"></a>Veth Pair</h2><p>veth pair通常被用于连接不同网络命名空间的虚拟网线。<br>veth pair也可以用于连接容器和宿主机的docker0网桥。比如：<br>查看容器的路由表</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">(base) zai@bc165b88ed3f:~$ route</span><br><span class="line">Kernel IP routing table</span><br><span class="line">Destination     Gateway         Genmask         Flags Metric Ref    Use Iface</span><br><span class="line">default         172.17.0.1      0.0.0.0         UG    0      0        0 eth0</span><br><span class="line">172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 eth0</span><br></pre></td></tr></table></figure>
+<p>查看宿主机的虚拟网桥</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">(base) zhiqiang@vccserver:~$ brctl show</span><br><span class="line">bridge name	bridge <span class="built_in">id</span>		STP enabled	interfaces</span><br><span class="line">docker0		8000.02426f2d9774	no		veth1a2cc8c</span><br></pre></td></tr></table></figure>
+<p>可以看出veth pair的一端是容器的eth0，另一端是宿主机的veth1a2cc8c。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>docker通过docker0和veth pair实现了链路层上的网络通信。<br>docker0可以充当二层交换机的作用，veth pair起到“网线”的作用。</p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/02/24/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="QXY‘s blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2022/02/24/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/" itemprop="url">C++反汇编分析-数组</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-02-24T06:04:40+08:00">
+                2022-02-24
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <p>编译器：x86-64 gcc 12.2</p>
+<h3 id="一、栈空间分配"><a href="#一、栈空间分配" class="headerlink" title="一、栈空间分配"></a>一、栈空间分配</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span></span>&#123;</span><br><span class="line">    <span class="type">char</span> a[<span class="number">112</span>];</span><br><span class="line">    a[<span class="number">0</span>]=<span class="number">1</span>;</span><br><span class="line">    a[<span class="number">111</span>]=<span class="number">0</span>;</span><br><span class="line">    a[<span class="number">113</span>]=<span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><img src="/2022/02/24/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/1666432601238.png" alt="a"></p>
+<ul>
+<li>数组由低地址往高地址分配内存，即小端模式。</li>
+<li>可以给超出下标的数组赋值，这会导致栈帧以外的数据被修改。</li>
+<li>rsp以外的128字节被当作保留区（red zone）,可以用于临时值的存储。即如果使用空间小于128字节，就不需要移动rsp。</li>
+</ul>
+<h3 id="二、字节对齐"><a href="#二、字节对齐" class="headerlink" title="二、字节对齐"></a>二、字节对齐</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span></span>&#123;</span><br><span class="line">    <span class="type">char</span> a[<span class="number">113</span>];</span><br><span class="line">    a[<span class="number">0</span>]=<span class="number">1</span>;</span><br><span class="line">    a[<span class="number">112</span>]=<span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><img src="/2022/02/24/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/1666433091566.png" alt="b"></p>
+<ul>
+<li>113字节的大小的数组占用了129字节的栈空间。这是因为System V ABI的规范，需要<strong>16字节对齐</strong>。</li>
+<li>rsp向下拓展了8字节。由于red zone只有128字节，所以rsp需要向下拓展，从而扩充整体的栈空间。根据System V ABI的规范，<strong>rsp的值要求是8n+16</strong>。</li>
+<li>总之，当数组大小n超过112字节的时候，rsp需要移动x&#x3D;ceil(n&#x2F;16)*16-128+8 字节。 例如n&#x3D;1000,x&#x3D;888。</li>
+</ul>
+<h3 id="三、栈空间最大值"><a href="#三、栈空间最大值" class="headerlink" title="三、栈空间最大值"></a>三、栈空间最大值</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span></span>&#123;</span><br><span class="line">    <span class="type">char</span> a[<span class="number">9223372036854775296</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><img src="/2022/02/24/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/1666437319777.png" alt="c"></p>
+<ul>
+<li>数组能够占用的栈空间最大是2^63-1字节。超过这个值会编译报错。<strong>这取决于rsp寄存器的位数</strong>。</li>
+<li>如果是32位，则不能超过2G(2^31-1)。</li>
+</ul>
+<h3 id="四、堆空间分配最大值"><a href="#四、堆空间分配最大值" class="headerlink" title="四、堆空间分配最大值"></a>四、堆空间分配最大值</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span></span>&#123;</span><br><span class="line">    <span class="type">char</span>* a = <span class="keyword">new</span> <span class="type">char</span>[<span class="number">0x7ffffffffffffff8</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><img src="/2022/02/24/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/1666439077870.png" alt="d"></p>
+<ul>
+<li>同理，数组在堆能够分配的最大值是取决于<strong>rax寄存器的位数</strong>，因为调用new函数需要的<strong>传参的立即数需要存放在rax</strong>。只要n不超过rax寄存器的位数，是可以编译成功的。</li>
+<li>但在运行时往往是达不到理论上的最大值。动态开辟内存时，会使用 malloc 等函数在堆区开辟空间，分配器将通过特定的数据结构（如链表）组织堆区的数据块。如果内存不足，则会触发std::bad_alloc函数。</li>
+</ul>
+<h3 id="五、全局变量"><a href="#五、全局变量" class="headerlink" title="五、全局变量"></a>五、全局变量</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">char</span> a[<span class="number">0x7fffffffffffffff</span>];</span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span></span>&#123;</span><br><span class="line">   a[<span class="number">0</span>]=<span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight x86asm"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">mov</span>    <span class="built_in">BYTE</span> <span class="built_in">PTR</span> [<span class="built_in">rip</span>+<span class="number">0x2f4f</span>],<span class="number">0x1</span>        # <span class="number">404060</span> &lt;a&gt;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>全局变量在编译期已经确定了地址，可以通过当前地址（rip）+偏移（立即数）进行访问。</li>
+<li>同理，全局变量数组空间的理论最大值也取决于寄存器的位数。</li>
+<li>全局静态变量与全局变量类似。差别在于<strong>无法被外部文件所访问</strong>。</li>
+</ul>
+<h3 id="六、局部静态变量"><a href="#六、局部静态变量" class="headerlink" title="六、局部静态变量"></a>六、局部静态变量</h3><ul>
+<li>局部静态变量预先会被当作全局变量处理，差别在于<strong>作用域和声明初始化赋值操作</strong>。</li>
+<li>如果是通过变量对局部静态变量进行声明且赋值，需要使用1个标志位来判断局部变量是否初始化过。<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">(<span class="type">int</span> y)</span></span>&#123;</span><br><span class="line">    <span class="type">static</span> <span class="type">int</span> x[] = &#123;y&#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight x86asm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">f(<span class="keyword">int</span>):</span><br><span class="line">    <span class="keyword">push</span>    <span class="built_in">rbp</span></span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">rbp</span>, <span class="built_in">rsp</span></span><br><span class="line">    <span class="keyword">sub</span>     <span class="built_in">rsp</span>, <span class="number">16</span></span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">DWORD</span> <span class="built_in">PTR</span> [<span class="built_in">rbp</span>-<span class="number">4</span>], <span class="built_in">edi</span></span><br><span class="line">    <span class="keyword">movzx</span>   <span class="built_in">eax</span>, <span class="built_in">BYTE</span> <span class="built_in">PTR</span> guard variable for f(<span class="keyword">int</span>)::x[<span class="built_in">rip</span>] #守护标志位</span><br><span class="line">    <span class="keyword">test</span>    <span class="built_in">al</span>, <span class="built_in">al</span> </span><br><span class="line">    <span class="keyword">sete</span>    <span class="built_in">al</span></span><br><span class="line">    <span class="keyword">test</span>    <span class="built_in">al</span>, <span class="built_in">al</span></span><br><span class="line">    <span class="keyword">je</span>      .L3 #如果标志位为<span class="number">1</span>，即已经初始化了，则直接返回</span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">edi</span>, OFFSET FLAT:guard variable for f(<span class="keyword">int</span>)::x</span><br><span class="line">    <span class="keyword">call</span>    __cxa_guard_acquire #获取锁</span><br><span class="line">    <span class="keyword">test</span>    <span class="built_in">eax</span>, <span class="built_in">eax</span></span><br><span class="line">    <span class="keyword">setne</span>   <span class="built_in">al</span></span><br><span class="line">    <span class="keyword">test</span>    <span class="built_in">al</span>, <span class="built_in">al</span></span><br><span class="line">    <span class="keyword">je</span>      .L3 #加锁失败则直接返回</span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">eax</span>, <span class="built_in">DWORD</span> <span class="built_in">PTR</span> [<span class="built_in">rbp</span>-<span class="number">4</span>]</span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">DWORD</span> <span class="built_in">PTR</span> f(<span class="keyword">int</span>)::x[<span class="built_in">rip</span>], <span class="built_in">eax</span></span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">edi</span>, OFFSET FLAT:guard variable for f(<span class="keyword">int</span>)::x</span><br><span class="line">    <span class="keyword">call</span>    __cxa_guard_release</span><br><span class="line"><span class="symbol">.L3:</span></span><br><span class="line">    <span class="keyword">nop</span></span><br><span class="line">    <span class="keyword">leave</span></span><br><span class="line">    <span class="keyword">ret</span></span><br></pre></td></tr></table></figure></li>
+<li>局部静态变量若用常量赋值，则在编译期完成。</li>
+</ul>
+<h3 id="七、char数组初始化字符串"><a href="#七、char数组初始化字符串" class="headerlink" title="七、char数组初始化字符串"></a>七、char数组初始化字符串</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">char</span> s[] = <span class="string">&quot;123456789&quot;</span>;</span><br></pre></td></tr></table></figure>
+<figure class="highlight x86asm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">movabs  <span class="built_in">rax</span>, <span class="number">4050765991979987505</span></span><br><span class="line"><span class="keyword">mov</span>     <span class="built_in">QWORD</span> <span class="built_in">PTR</span> [<span class="built_in">rbp</span>-<span class="number">10</span>], <span class="built_in">rax</span></span><br><span class="line"><span class="keyword">mov</span>     <span class="built_in">WORD</span> <span class="built_in">PTR</span> [<span class="built_in">rbp</span>-<span class="number">2</span>], <span class="number">57</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>字符串拷贝<strong>每次复制8个字节</strong>到寄存器（64位），再复制到内存。小于8字节，则是立即数复制到内存。</li>
+<li>字符串结尾会添加一个0。</li>
+</ul>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/02/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90-%E7%B1%BB/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="QXY‘s blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2022/02/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90-%E7%B1%BB/" itemprop="url">C++反汇编分析-类</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-02-22T22:18:03+08:00">
+                2022-02-22
               </time>
             
 
@@ -685,7 +1594,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/01/19/System-V-ABI-x86-64/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="">
@@ -704,7 +1613,7 @@
         
           <h1 class="post-title" itemprop="name headline">
                 
-                <a class="post-title-link" href="/2022/10/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/" itemprop="url">C++反汇编分析-数组</a></h1>
+                <a class="post-title-link" href="/2022/01/19/System-V-ABI-x86-64/" itemprop="url">System V ABI x86-64</a></h1>
         
 
         <div class="post-meta">
@@ -716,311 +1625,8 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-22T06:04:40+08:00">
-                2022-10-22
-              </time>
-            
-
-            
-
-            
-          </span>
-
-          
-
-          
-            
-          
-
-          
-          
-
-          
-
-          
-
-          
-
-        </div>
-      </header>
-    
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-      
-
-      
-        
-          
-            <p>编译器：x86-64 gcc 12.2</p>
-<h3 id="一、栈空间分配"><a href="#一、栈空间分配" class="headerlink" title="一、栈空间分配"></a>一、栈空间分配</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span></span>&#123;</span><br><span class="line">    <span class="type">char</span> a[<span class="number">112</span>];</span><br><span class="line">    a[<span class="number">0</span>]=<span class="number">1</span>;</span><br><span class="line">    a[<span class="number">111</span>]=<span class="number">0</span>;</span><br><span class="line">    a[<span class="number">113</span>]=<span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p><img src="/2022/10/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/1666432601238.png" alt="a"></p>
-<ul>
-<li>数组由低地址往高地址分配内存，即小端模式。</li>
-<li>可以给超出下标的数组赋值，这会导致栈帧以外的数据被修改。</li>
-<li>rsp以外的128字节被当作保留区（red zone）,可以用于临时值的存储。即如果使用空间小于128字节，就不需要移动rsp。</li>
-</ul>
-<h3 id="二、字节对齐"><a href="#二、字节对齐" class="headerlink" title="二、字节对齐"></a>二、字节对齐</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span></span>&#123;</span><br><span class="line">    <span class="type">char</span> a[<span class="number">113</span>];</span><br><span class="line">    a[<span class="number">0</span>]=<span class="number">1</span>;</span><br><span class="line">    a[<span class="number">112</span>]=<span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p><img src="/2022/10/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/1666433091566.png" alt="b"></p>
-<ul>
-<li>113字节的大小的数组占用了129字节的栈空间。这是因为System V ABI的规范，需要<strong>16字节对齐</strong>。</li>
-<li>rsp向下拓展了8字节。由于red zone只有128字节，所以rsp需要向下拓展，从而扩充整体的栈空间。根据System V ABI的规范，<strong>rsp的值要求是8n+16</strong>。</li>
-<li>总之，当数组大小n超过112字节的时候，rsp需要移动x&#x3D;ceil(n&#x2F;16)*16-128+8 字节。 例如n&#x3D;1000,x&#x3D;888。</li>
-</ul>
-<h3 id="三、栈空间最大值"><a href="#三、栈空间最大值" class="headerlink" title="三、栈空间最大值"></a>三、栈空间最大值</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span></span>&#123;</span><br><span class="line">    <span class="type">char</span> a[<span class="number">9223372036854775296</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p><img src="/2022/10/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/1666437319777.png" alt="c"></p>
-<ul>
-<li>数组能够占用的栈空间最大是2^63-1字节。超过这个值会编译报错。<strong>这取决于rsp寄存器的位数</strong>。</li>
-<li>如果是32位，则不能超过2G(2^31-1)。</li>
-</ul>
-<h3 id="四、堆空间分配最大值"><a href="#四、堆空间分配最大值" class="headerlink" title="四、堆空间分配最大值"></a>四、堆空间分配最大值</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">()</span></span>&#123;</span><br><span class="line">    <span class="type">char</span>* a = <span class="keyword">new</span> <span class="type">char</span>[<span class="number">0x7ffffffffffffff8</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p><img src="/2022/10/22/C-%E5%8F%8D%E6%B1%87%E7%BC%96%E5%88%86%E6%9E%90/1666439077870.png" alt="d"></p>
-<ul>
-<li>同理，数组在堆能够分配的最大值是取决于<strong>rax寄存器的位数</strong>，因为调用new函数需要的<strong>传参的立即数需要存放在rax</strong>。只要n不超过rax寄存器的位数，是可以编译成功的。</li>
-<li>但在运行时往往是达不到理论上的最大值。动态开辟内存时，会使用 malloc 等函数在堆区开辟空间，分配器将通过特定的数据结构（如链表）组织堆区的数据块。如果内存不足，则会触发std::bad_alloc函数。</li>
-</ul>
-<h3 id="五、全局变量"><a href="#五、全局变量" class="headerlink" title="五、全局变量"></a>五、全局变量</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">char</span> a[<span class="number">0x7fffffffffffffff</span>];</span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span></span>&#123;</span><br><span class="line">   a[<span class="number">0</span>]=<span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<figure class="highlight x86asm"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">mov</span>    <span class="built_in">BYTE</span> <span class="built_in">PTR</span> [<span class="built_in">rip</span>+<span class="number">0x2f4f</span>],<span class="number">0x1</span>        # <span class="number">404060</span> &lt;a&gt;</span><br></pre></td></tr></table></figure>
-<ul>
-<li>全局变量在编译期已经确定了地址，可以通过当前地址（rip）+偏移（立即数）进行访问。</li>
-<li>同理，全局变量数组空间的理论最大值也取决于寄存器的位数。</li>
-<li>全局静态变量与全局变量类似。差别在于<strong>无法被外部文件所访问</strong>。</li>
-</ul>
-<h3 id="六、局部静态变量"><a href="#六、局部静态变量" class="headerlink" title="六、局部静态变量"></a>六、局部静态变量</h3><ul>
-<li>局部静态变量预先会被当作全局变量处理，差别在于<strong>作用域和声明初始化赋值操作</strong>。</li>
-<li>如果是通过变量对局部静态变量进行声明且赋值，需要使用1个标志位来判断局部变量是否初始化过。<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">(<span class="type">int</span> y)</span></span>&#123;</span><br><span class="line">    <span class="type">static</span> <span class="type">int</span> x[] = &#123;y&#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<figure class="highlight x86asm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">f(<span class="keyword">int</span>):</span><br><span class="line">    <span class="keyword">push</span>    <span class="built_in">rbp</span></span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">rbp</span>, <span class="built_in">rsp</span></span><br><span class="line">    <span class="keyword">sub</span>     <span class="built_in">rsp</span>, <span class="number">16</span></span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">DWORD</span> <span class="built_in">PTR</span> [<span class="built_in">rbp</span>-<span class="number">4</span>], <span class="built_in">edi</span></span><br><span class="line">    <span class="keyword">movzx</span>   <span class="built_in">eax</span>, <span class="built_in">BYTE</span> <span class="built_in">PTR</span> guard variable for f(<span class="keyword">int</span>)::x[<span class="built_in">rip</span>] #守护标志位</span><br><span class="line">    <span class="keyword">test</span>    <span class="built_in">al</span>, <span class="built_in">al</span> </span><br><span class="line">    <span class="keyword">sete</span>    <span class="built_in">al</span></span><br><span class="line">    <span class="keyword">test</span>    <span class="built_in">al</span>, <span class="built_in">al</span></span><br><span class="line">    <span class="keyword">je</span>      .L3 #如果标志位为<span class="number">1</span>，即已经初始化了，则直接返回</span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">edi</span>, OFFSET FLAT:guard variable for f(<span class="keyword">int</span>)::x</span><br><span class="line">    <span class="keyword">call</span>    __cxa_guard_acquire #获取锁</span><br><span class="line">    <span class="keyword">test</span>    <span class="built_in">eax</span>, <span class="built_in">eax</span></span><br><span class="line">    <span class="keyword">setne</span>   <span class="built_in">al</span></span><br><span class="line">    <span class="keyword">test</span>    <span class="built_in">al</span>, <span class="built_in">al</span></span><br><span class="line">    <span class="keyword">je</span>      .L3 #加锁失败则直接返回</span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">eax</span>, <span class="built_in">DWORD</span> <span class="built_in">PTR</span> [<span class="built_in">rbp</span>-<span class="number">4</span>]</span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">DWORD</span> <span class="built_in">PTR</span> f(<span class="keyword">int</span>)::x[<span class="built_in">rip</span>], <span class="built_in">eax</span></span><br><span class="line">    <span class="keyword">mov</span>     <span class="built_in">edi</span>, OFFSET FLAT:guard variable for f(<span class="keyword">int</span>)::x</span><br><span class="line">    <span class="keyword">call</span>    __cxa_guard_release</span><br><span class="line"><span class="symbol">.L3:</span></span><br><span class="line">    <span class="keyword">nop</span></span><br><span class="line">    <span class="keyword">leave</span></span><br><span class="line">    <span class="keyword">ret</span></span><br></pre></td></tr></table></figure></li>
-<li>局部静态变量若用常量赋值，则在编译期完成。</li>
-</ul>
-<h3 id="七、char数组初始化字符串"><a href="#七、char数组初始化字符串" class="headerlink" title="七、char数组初始化字符串"></a>七、char数组初始化字符串</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">char</span> s[] = <span class="string">&quot;123456789&quot;</span>;</span><br></pre></td></tr></table></figure>
-<figure class="highlight x86asm"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">movabs  <span class="built_in">rax</span>, <span class="number">4050765991979987505</span></span><br><span class="line"><span class="keyword">mov</span>     <span class="built_in">QWORD</span> <span class="built_in">PTR</span> [<span class="built_in">rbp</span>-<span class="number">10</span>], <span class="built_in">rax</span></span><br><span class="line"><span class="keyword">mov</span>     <span class="built_in">WORD</span> <span class="built_in">PTR</span> [<span class="built_in">rbp</span>-<span class="number">2</span>], <span class="number">57</span></span><br></pre></td></tr></table></figure>
-<ul>
-<li>字符串拷贝<strong>每次复制8个字节</strong>到寄存器（64位），再复制到内存。小于8字节，则是立即数复制到内存。</li>
-<li>字符串结尾会添加一个0。</li>
-</ul>
-
-          
-        
-      
-    </div>
-    
-    
-    
-
-    
-
-    
-
-    
-
-    <footer class="post-footer">
-      
-
-      
-
-      
-
-      
-      
-        <div class="post-eof"></div>
-      
-    </footer>
-  </div>
-  
-  
-  
-  </article>
-
-
-    
-      
-
-  
-
-  
-  
-  
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-  
-  
-  
-  <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/22/docker-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="name" content="">
-      <meta itemprop="description" content="">
-      <meta itemprop="image" content="/images/avatar.gif">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="QXY‘s blog">
-    </span>
-
-    
-      <header class="post-header">
-
-        
-        
-          <h1 class="post-title" itemprop="name headline">
-                
-                <a class="post-title-link" href="/2022/10/22/docker-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/" itemprop="url">docker-文件系统</a></h1>
-        
-
-        <div class="post-meta">
-          <span class="post-time">
-            
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">发表于</span>
-              
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-22T00:04:11+08:00">
-                2022-10-22
-              </time>
-            
-
-            
-
-            
-          </span>
-
-          
-
-          
-            
-          
-
-          
-          
-
-          
-
-          
-
-          
-
-        </div>
-      </header>
-    
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-      
-
-      
-        
-          
-            <p>Docker 支持了不同的存储驱动，包括 <code>aufs</code>、<code>devicemapper</code>、<code>overlay2</code>、<code>zfs</code> 和 <code>vfs</code> 等等，在最新的 Docker 中，<code>overlay2</code> 取代了 <code>aufs</code> 成为了推荐的存储驱动，但是在没有 <code>overlay2</code> 驱动的机器上仍然会使用 <code>aufs</code> 作为 Docker 的默认驱动。</p>
-<h2 id="overlayfs"><a href="#overlayfs" class="headerlink" title="overlayfs"></a>overlayfs</h2><ul>
-<li><p>Overlayfs 是一种类似 aufs 的一种堆叠文件系统，于 2014 年正式合入 Linux-3.18 主线内核，</p>
-</li>
-<li><p>它依赖并建立在其它的文件系统之上（例如 ext4fs 和 xfs 等等），并不直接参与磁盘空间结构的划分，仅仅将原来底层文件系统中不同的目录进行“合并”，然后向用户呈现。</p>
-</li>
-</ul>
-<h2 id="docker应用"><a href="#docker应用" class="headerlink" title="docker应用"></a>docker应用</h2><p>overlay分为lower,upper,merge。</p>
-<ul>
-<li>lower（镜像层）是只读层，用于存放docker共享的image镜像。</li>
-<li>upper（容器层）是读写层，通过commit操作层层堆叠覆盖。</li>
-<li>merge 是两者的合并，做为容器的rootfs。</li>
-</ul>
-<h2 id="关于docker-commit"><a href="#关于docker-commit" class="headerlink" title="关于docker commit"></a>关于docker commit</h2><ul>
-<li>docker commit，实际上就是对运行起来的docker容器，把upper的可读写层，加上原先lower的容器镜像的只读层，打包组成了一个新的镜像。</li>
-<li>lower的只读层在宿主机上是共享的，不会占用额外的空间。</li>
-<li>在容器里对镜像 rootfs 所做的任何修改，都会被操作系统先复制到upper的可读写层，然后再修改，也就是Copy-on-Write。</li>
-<li>在容器里对lower层文件的删除操作是软删除。通过whiteout进行遮挡。因为lower是只读的。</li>
-</ul>
-
-          
-        
-      
-    </div>
-    
-    
-    
-
-    
-
-    
-
-    
-
-    <footer class="post-footer">
-      
-
-      
-
-      
-
-      
-      
-        <div class="post-eof"></div>
-      
-    </footer>
-  </div>
-  
-  
-  
-  </article>
-
-
-    
-      
-
-  
-
-  
-  
-  
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-  
-  
-  
-  <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/21/System-V-ABI-x86-64/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="name" content="">
-      <meta itemprop="description" content="">
-      <meta itemprop="image" content="/images/avatar.gif">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="QXY‘s blog">
-    </span>
-
-    
-      <header class="post-header">
-
-        
-        
-          <h1 class="post-title" itemprop="name headline">
-                
-                <a class="post-title-link" href="/2022/10/21/System-V-ABI-x86-64/" itemprop="url">System V ABI x86-64</a></h1>
-        
-
-        <div class="post-meta">
-          <span class="post-time">
-            
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">发表于</span>
-              
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-21T23:06:17+08:00">
-                2022-10-21
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-01-19T23:06:17+08:00">
+                2022-01-19
               </time>
             
 
@@ -1075,7 +1681,7 @@
 <li><p>返回值存储在<code>rax</code>寄存器中，或者如果它是128位值，则高64位进入<code>rdx</code>。</p>
 </li>
 </ul>
-<h3 id="栈帧（stack-frame）"><a href="#栈帧（stack-frame）" class="headerlink" title="栈帧（stack frame）"></a>栈帧（stack frame）</h3><p>每个函数在运行时都维持一个栈帧。从高地址向低地址拓展。如下图所示。<br><img src="/2022/10/21/System-V-ABI-x86-64/1666423708683.png" alt="image-20221022152844100"></p>
+<h3 id="栈帧（stack-frame）"><a href="#栈帧（stack-frame）" class="headerlink" title="栈帧（stack frame）"></a>栈帧（stack frame）</h3><p>每个函数在运行时都维持一个栈帧。从高地址向低地址拓展。如下图所示。<br><img src="/2022/01/19/System-V-ABI-x86-64/1666423708683.png" alt="image-20221022152844100"></p>
 <ul>
 <li><p>栈帧末端需要与16字节对齐。**<code>%rsp + 8</code>总是16的倍数。**这是因为传统rdp作为帧指针的技术是不可以使用rsp来索引栈帧的。通过这个规定可以使得这两个寄存器都能作为帧指针。</p>
 </li>
@@ -1117,286 +1723,13 @@
 
 
     
-      
-
-  
-
-  
-  
-  
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-  
-  
-  
-  <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/21/docker%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1%E5%8E%9F%E7%90%86%E7%AE%80%E5%8D%95%E5%88%86%E6%9E%90/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="name" content="">
-      <meta itemprop="description" content="">
-      <meta itemprop="image" content="/images/avatar.gif">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="QXY‘s blog">
-    </span>
-
-    
-      <header class="post-header">
-
-        
-        
-          <h1 class="post-title" itemprop="name headline">
-                
-                <a class="post-title-link" href="/2022/10/21/docker%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1%E5%8E%9F%E7%90%86%E7%AE%80%E5%8D%95%E5%88%86%E6%9E%90/" itemprop="url">docker网络通信原理简单分析</a></h1>
-        
-
-        <div class="post-meta">
-          <span class="post-time">
-            
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">发表于</span>
-              
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-21T21:56:31+08:00">
-                2022-10-21
-              </time>
-            
-
-            
-
-            
-          </span>
-
-          
-
-          
-            
-          
-
-          
-          
-
-          
-
-          
-
-          
-
-        </div>
-      </header>
-    
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-      
-
-      
-        
-          
-            <h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>docker容器可以直接使用宿主机的网络栈（–net&#x3D;host），即：不开启 Network Namespace，比如：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">docker run –d –net=host --name nginx-host nginx</span><br></pre></td></tr></table></figure>
-
-<p>在这种情况下，这个容器启动后，直接监听的就是宿主机的 80 端口。</p>
-<p>而所谓“网络栈”，就包括了：网卡（Network Interface）、回环设备（Loopback Device）、路由表（Routing Table）和 iptables 规则。</p>
-<p>像这样直接使用宿主机网络栈的方式，不可避免地引入共享网络资源的问题，比如端口冲突。</p>
-<p>所以，<strong>在大多数情况下，我们都希望容器进程能使用自己网络栈，即拥有属于自己的 IP 地址和端口</strong>。</p>
-<p>那么，<strong>相互隔离的容器进程是怎么样进行通信的呢？</strong></p>
-<h2 id="网桥"><a href="#网桥" class="headerlink" title="网桥"></a>网桥</h2><p>我们可以把容器当作一台主机。</p>
-<p>两台主机之间的通信，就是利用网线连接起来。</p>
-<p>多台主机的通信，则是将网线连在同一台交换机上。</p>
-<p>在Linux中，<strong>网桥（Bridge）</strong>可以起到虚拟交换机的作用。</p>
-<p>Docker服务会在宿主机创建一个名为docker0的网桥，所有docker都可以通过它来进行通信。</p>
-<p>通过ifconfig进行查看：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">(base) zhiqiang@vccserver:~$ ifconfig</span><br><span class="line">docker0: flags=4163&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu 1500</span><br><span class="line">        inet 172.17.0.1  netmask 255.255.0.0  broadcast 172.17.255.255</span><br><span class="line">        inet6 fe80::42:6fff:fe2d:9774  prefixlen 64  scopeid 0x20&lt;<span class="built_in">link</span>&gt;</span><br><span class="line">        ether 02:42:6f:2d:97:74  txqueuelen 0  (Ethernet)</span><br><span class="line">        RX packets 30700116  bytes 295005873644 (295.0 GB)</span><br><span class="line">        RX errors 0  dropped 0  overruns 0  frame 0</span><br><span class="line">        TX packets 125243801  bytes 16398186665 (16.3 GB)</span><br><span class="line">        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0</span><br></pre></td></tr></table></figure>
-<h2 id="Veth-Pair"><a href="#Veth-Pair" class="headerlink" title="Veth Pair"></a>Veth Pair</h2><p>veth pair通常被用于连接不同网络命名空间的虚拟网线。<br>veth pair也可以用于连接容器和宿主机的docker0网桥。比如：<br>查看容器的路由表</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">(base) zai@bc165b88ed3f:~$ route</span><br><span class="line">Kernel IP routing table</span><br><span class="line">Destination     Gateway         Genmask         Flags Metric Ref    Use Iface</span><br><span class="line">default         172.17.0.1      0.0.0.0         UG    0      0        0 eth0</span><br><span class="line">172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 eth0</span><br></pre></td></tr></table></figure>
-<p>查看宿主机的虚拟网桥</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">(base) zhiqiang@vccserver:~$ brctl show</span><br><span class="line">bridge name	bridge <span class="built_in">id</span>		STP enabled	interfaces</span><br><span class="line">docker0		8000.02426f2d9774	no		veth1a2cc8c</span><br></pre></td></tr></table></figure>
-<p>可以看出veth pair的一端是容器的eth0，另一端是宿主机的veth1a2cc8c。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>docker通过docker0和veth pair实现了链路层上的网络通信。<br>docker0可以充当二层交换机的作用，veth pair起到“网线”的作用。</p>
-
-          
-        
-      
-    </div>
-    
-    
-    
-
-    
-
-    
-
-    
-
-    <footer class="post-footer">
-      
-
-      
-
-      
-
-      
-      
-        <div class="post-eof"></div>
-      
-    </footer>
-  </div>
-  
-  
-  
-  </article>
-
-
-    
-      
-
-  
-
-  
-  
-  
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-  
-  
-  
-  <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2022/10/21/C-%E6%96%87%E4%BB%B6%E5%86%85%E5%AD%98/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="name" content="">
-      <meta itemprop="description" content="">
-      <meta itemprop="image" content="/images/avatar.gif">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="QXY‘s blog">
-    </span>
-
-    
-      <header class="post-header">
-
-        
-        
-          <h1 class="post-title" itemprop="name headline">
-                
-                <a class="post-title-link" href="/2022/10/21/C-%E6%96%87%E4%BB%B6%E5%86%85%E5%AD%98/" itemprop="url">C++文件内存</a></h1>
-        
-
-        <div class="post-meta">
-          <span class="post-time">
-            
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">发表于</span>
-              
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2022-10-21T21:25:09+08:00">
-                2022-10-21
-              </time>
-            
-
-            
-
-            
-          </span>
-
-          
-
-          
-            
-          
-
-          
-          
-
-          
-
-          
-
-          
-
-        </div>
-      </header>
-    
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-      
-
-      
-        
-          
-            <h3 id="可重定位目标文件内存"><a href="#可重定位目标文件内存" class="headerlink" title="可重定位目标文件内存"></a>可重定位目标文件内存</h3><p><img src="/2022/10/21/C-%E6%96%87%E4%BB%B6%E5%86%85%E5%AD%98/%E5%8F%AF%E9%87%8D%E5%AE%9A%E4%BD%8D%E7%9B%AE%E6%A0%87%E6%96%87%E4%BB%B6.jpg" alt="可重定位目标文件"></p>
-<ul>
-<li>.text 代码段</li>
-<li>.rodata 只读数据，如字符串常量。</li>
-<li>.data 全局变量和静态变量。<strong>static和const修饰属于内部链接，不会放到导出符号表。</strong></li>
-<li>.bss 未初始化的全局变量和静态变量。只分配大小，不会分配内存。<strong>可以缩减可执行文件的大小。</strong></li>
-<li>.symtab 导出符号表： 本编译单元所有定义好的符号和地址，用于外部链接。</li>
-<li>.rel.text 记录一些.text位置的列表，未定义的引用，未定义符号的地址。比如<strong>extern修饰的声明</strong>；</li>
-<li>.rel.data 需要地址重定向的数据</li>
-</ul>
-<h3 id="可执行文件内存"><a href="#可执行文件内存" class="headerlink" title="可执行文件内存"></a>可执行文件内存</h3><p><img src="/2022/10/21/C-%E6%96%87%E4%BB%B6%E5%86%85%E5%AD%98/%E5%8F%AF%E6%89%A7%E8%A1%8C%E6%96%87%E4%BB%B6.png" alt="a"></p>
-<h3 id="头文件变量相关"><a href="#头文件变量相关" class="headerlink" title="头文件变量相关"></a>头文件变量相关</h3><ul>
-<li>const变量在编译时已经变成了常量，不会有符号名冲突（链接期）。</li>
-<li>非const变量link可能会冲突。引用了其头文件时，等同于在源文件中声明或定义了这个全局变量。</li>
-<li>用extern声明全局变量 ，即使没有引用该头文件，也可以使用。</li>
-<li>static变量不会冲突（连接性为内部）。</li>
-<li>命名空间中声明的名称的连接性为外部的。</li>
-</ul>
-
-          
-        
-      
-    </div>
-    
-    
-    
-
-    
-
-    
-
-    
-
-    <footer class="post-footer">
-      
-
-      
-
-      
-
-      
-      
-        <div class="post-eof"></div>
-      
-    </footer>
-  </div>
-  
-  
-  
-  </article>
-
-
-    
   </section>
 
   
+  <nav class="pagination">
+    <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="extend next" rel="next" href="/page/2/">&lt;i class&#x3D;&quot;fa fa-angle-right&quot;&gt;&lt;&#x2F;i&gt;</a>
+  </nav>
+
 
 
           </div>
@@ -1440,7 +1773,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">8</span>
+                  <span class="site-state-item-count">11</span>
                   <span class="site-state-item-name">日志</span>
                 </a>
               </div>
@@ -1453,7 +1786,7 @@
               
               <div class="site-state-item site-state-tags">
                 <a href="/tags/index.html">
-                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-count">6</span>
                   <span class="site-state-item-name">标签</span>
                 </a>
               </div>
